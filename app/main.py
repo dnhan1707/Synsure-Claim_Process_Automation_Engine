@@ -35,7 +35,7 @@ def create_application() -> FastAPI:
     async def send_email(data: EmailRequest):
 
         # Compose email
-        body = f"Name: {data.name}\nEmail: {data.email}\nMessage: {data.message}"
+        body = f"Name: {data.name}\n Company: {data.company} \nEmail: {data.email}\nMessage: {data.message}"
         msg = MIMEText(body)
         msg["Subject"] = "Demo Request"
         msg["From"] = data.email

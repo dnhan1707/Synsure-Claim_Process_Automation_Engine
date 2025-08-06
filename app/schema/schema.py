@@ -6,5 +6,6 @@ class CaseMetadata(BaseModel):
 
 class EmailRequest(BaseModel):
     name: str
+    company: str
     email: EmailStr
     message: str
