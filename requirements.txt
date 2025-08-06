@@ -4,3 +4,6 @@ google-genai
 python-dotenv
 google
 PyPDF2
+pydantic[email]
+dotenv
+python-multipart
