@@ -38,8 +38,8 @@ def create_application() -> FastAPI:
         body = f"Name: {data.name}\nEmail: {data.email}\nMessage: {data.message}"
         msg = MIMEText(body)
         msg["Subject"] = "Demo Request"
-        msg["From"] = DEMO_EMAIL_USER
-        msg["To"] = data.email
+        msg["From"] = data.email
+        msg["To"] = DEMO_EMAIL_USER
 
         # Send email (use your credentials)
         try:
