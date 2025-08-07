@@ -7,3 +7,4 @@ PyPDF2
 pydantic[email]
 dotenv
 python-multipart
+boto3

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from typing import Dict, Any, List
 from app.service.model import ModelService
-from app.schema.schema import CaseMetadata
 
 def create_model_route() -> APIRouter:
     router = APIRouter(
@@ -12,19 +12,19 @@ def create_model_route() -> APIRouter:
     @router.post("/")
     async def model_response(    
         case_id: str = Form(...),
-        case_type: str = Form(...),
-        files: List[UploadFile] = File(...)):
+        files: List[UploadFile] = File(...)
+    ) -> Dict[str, Any]:
         try:
+            manual_input = ""
             model_service = ModelService()
             result = await model_service.generate_response(
                 files,
-                case_type,
+                manual_input,
                 case_id
             )
-            return {"result": result} 
+            return JSONResponse({"result": result}, status_code=200)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
     return router

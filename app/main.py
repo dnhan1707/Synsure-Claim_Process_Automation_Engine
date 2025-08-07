@@ -1,15 +1,8 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from app.routes.model_routes import create_model_route
-from email.mime.text import MIMEText
-from app.schema.schema import EmailRequest
-from dotenv import load_dotenv
-import smtplib
-import os
-
-DEMO_EMAIL_USER=os.getenv("DEMO_EMAIL_USER")
-DEMO_EMAIL_PASS=os.getenv("DEMO_EMAIL_PASS")
+# from app.routes.model_routes import create_model_route
+from app.routes.email_routes import create_email_route
+from app.routes.case_routes import create_case_route
 
 
 def create_application() -> FastAPI:
@@ -24,33 +17,14 @@ def create_application() -> FastAPI:
         allow_headers=["*"]
     )
     
-    app.include_router(create_model_route())
+    # app.include_router(create_model_route())
+    app.include_router(create_email_route())
+    app.include_router(create_case_route())
 
     @app.get("/")
     def healthcheck():
         return {"message": "api running"}
-
-
-    @app.post("/email")
-    async def send_email(data: EmailRequest):
-
-        # Compose email
-        body = f"Name: {data.name}\n Company: {data.company} \nEmail: {data.email}\nMessage: {data.message}"
-        msg = MIMEText(body)
-        msg["Subject"] = "Demo Request"
-        msg["From"] = data.email
-        msg["To"] = DEMO_EMAIL_USER
-
-        # Send email (use your credentials)
-        try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(DEMO_EMAIL_USER, DEMO_EMAIL_PASS)
-                server.sendmail(msg["From"], [msg["To"]], msg.as_string())
-            return JSONResponse({"success": True})
-        except Exception as e:
-            print("Email error:", e)
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
+    
     return app
 
 
