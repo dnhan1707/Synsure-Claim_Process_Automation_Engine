@@ -65,5 +65,31 @@ def create_case_route() -> APIRouter:
             return JSONResponse({"success": True, "case_id": result.get("case_id")}, status_code=200)
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-        
+    
+
+    @router.delete("/")
+    async def delete_case(case_ids: List[str]):
+        try:
+            result = await case_controller.delete_case(case_ids)
+            if "error" in result:
+                return JSONResponse({"success": False, "error": result["error"]}, status_code=500)
+            return JSONResponse({"success": True}, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+    @router.put("/")
+    async def update(
+        case_id: str = Form(...),
+        case_name: str = Form(...)
+    ):
+        try:
+            result = await case_controller.update(case_id, case_name)
+            if not result or ("error" in result):
+                return JSONResponse({"success": False, "error": result.get("error", "Unknown error") if result else "Unknown error"}, status_code=500)
+            return JSONResponse({"success": True}, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
     return router
+    

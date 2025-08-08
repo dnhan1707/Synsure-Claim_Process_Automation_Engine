@@ -32,6 +32,19 @@ def get_prompt(details: str):
     prompt = f"""
         You are an AI insurance claims analyst with expertise in fraud detection, policy compliance, and risk assessment. Analyze the following insurance claim and provide a comprehensive decision.
 
+        **IMPORTANT:**
+        - If CLAIM DETAILS is empty or missing, respond ONLY with the JSON object below, using:
+            - "decision": "REVIEW_REQUIRED"
+            - "reasoning": "No claim details or supporting documentation were provided for analysis. This case requires immediate human expert intervention to gather necessary data."
+            - "confidence": 50
+            - "riskScore": "HIGH"
+            - "flags": ["MANUAL_REVIEW_REQUIRED"]
+        - Do not include any markdown formatting or code blocks.
+        - Ensure all strings are properly quoted.
+        - Use exact flag names from the list below.
+        - Keep reasoning concise but informative.
+        - Base confidence on strength of evidence and clarity of case.
+
         **CLAIM DETAILS:**
         {details}
 
@@ -74,14 +87,7 @@ def get_prompt(details: str):
         Evidence: "POLICE_REPORT_AVAILABLE", "MEDICAL_VERIFIED", "WITNESS_AVAILABLE", "VIDEO_EVIDENCE"
         Risk: "HIGH_VALUE_CLAIM", "REPEAT_CLAIMANT", "POLICY_RECENT"
         Verification: "THIRD_PARTY_LIABILITY", "FIRE_DEPT_VERIFIED", "COVERAGE_ADEQUATE"
-
-        **IMPORTANT:** 
-        - Respond ONLY with the JSON object
-        - Do not include any markdown formatting or code blocks
-        - Ensure all strings are properly quoted
-        - Use exact flag names from the list above
-        - Keep reasoning concise but informative
-        - Base confidence on strength of evidence and clarity of case
-        """
-
+    """
     return prompt
+
+

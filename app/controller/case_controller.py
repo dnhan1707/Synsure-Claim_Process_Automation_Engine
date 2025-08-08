@@ -88,3 +88,13 @@ class CaseController():
         await file_service.save(case_id, case_name, file_contents, manual_input)
         
         return {"success": True, "case_id": case_id}
+    
+
+    async def delete_case(self, case_id: List[str]):
+        return await file_service.delete_cases(case_id)
+
+
+    async def update(self, case_id: str, case_name: str):
+        return await file_service.update_case_name(case_id, case_name)
+
+    

@@ -1,6 +1,4 @@
-# from typing import List
-# from fastapi import UploadFile
-# from starlette.datastructures import UploadFile
+from typing import List
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 import datetime
@@ -195,3 +193,37 @@ class FileService():
             return details
         except Exception as e:
             return f"Error extracting text: {e}"
+        
+    
+    async def delete_cases(self, case_ids: List[str]):
+        try:
+            all_keys = []
+            for case_id in case_ids:
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.AWS_BUCKET_NAME,
+                    Prefix=f"{case_id}/"
+                )
+                if "Contents" in response:
+                    all_keys.extend([{"Key": obj["Key"]} for obj in response["Contents"]])
+            # Delete in batches of 1000
+            for i in range(0, len(all_keys), 1000):
+                self.s3_client.delete_objects(
+                    Bucket=self.AWS_BUCKET_NAME,
+                    Delete={"Objects": all_keys[i:i+1000]}
+                )
+            return {"success": True, "deleted_keys": len(all_keys)}
+        except Exception as e:
+            return {"error": str(e)}
+        
+    
+    async def update_case_name(self, case_id: str, case_name: str):
+        try:
+            s3_key = f"{case_id}/case_name.txt"
+            self.s3_client.put_object(
+                Bucket=self.AWS_BUCKET_NAME,
+                Key=s3_key,
+                Body=case_name.encode("utf-8")
+            )
+            return {"success": True}
+        except Exception as e:
+            return {"error": str(e)}
