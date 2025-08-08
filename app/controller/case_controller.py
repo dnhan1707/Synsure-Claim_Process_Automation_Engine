@@ -3,6 +3,7 @@ from app.service.model import ModelService
 from fastapi import UploadFile
 from typing import List, Optional
 import uuid
+import json
 import asyncio
 
 file_service = FileService()
@@ -98,3 +99,5 @@ class CaseController():
         return await file_service.update_case_name(case_id, case_name)
 
     
+    async def get_latest_response(self, case_id: str):
+        return await file_service.get_latest_response(case_id)

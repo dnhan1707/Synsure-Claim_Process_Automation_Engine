@@ -1,5 +1,6 @@
 from typing import List
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
 from PyPDF2 import PdfReader
 import datetime
 import json
@@ -22,7 +23,8 @@ class FileService():
 
     async def save(self, case_id: str, case_name: str, file_contents: list, texts: str):
         try:
-            timestamp = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+            now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+            timestamp = now.strftime("%Y%m%dT%H%M%S")
             if len(file_contents) >= 1:
                 for file_info in file_contents:
                     original_filename = file_info["filename"]
@@ -59,7 +61,8 @@ class FileService():
     
     async def save_response(self, case_id: str, response):
         try:
-            timestamp = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+            now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+            timestamp = now.strftime("%Y%m%dT%H%M%S")
             if response:
                 # Convert dict to JSON string if needed
                 if not isinstance(response, str):
@@ -227,3 +230,25 @@ class FileService():
             return {"success": True}
         except Exception as e:
             return {"error": str(e)}
+        
+    
+    async def get_latest_response(self, case_id: str):
+        try:
+            prefix = f"{case_id}/response_"
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.AWS_BUCKET_NAME,
+                Prefix=prefix
+            )
+            if "Contents" not in response or not response["Contents"]:
+                return {"error": "No response files found"}
+            # Find the latest by sorting keys
+            response_files = [obj["Key"] for obj in response["Contents"] if obj["Key"].endswith(".json")]
+            if not response_files:
+                return {"error": "No response files found"}
+            latest_key = sorted(response_files)[-1]
+            s3_obj = self.s3_client.get_object(Bucket=self.AWS_BUCKET_NAME, Key=latest_key)
+            content = s3_obj["Body"].read().decode("utf-8")
+            return json.loads(content)
+        except Exception as e:
+            return {"error": str(e)}
+    
