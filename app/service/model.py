@@ -43,6 +43,39 @@ class ModelService():
 
         except Exception as e:
             return str(e)
+        
+
+    async def generate_response_v2(self, file_contents: list, manual_input: str):
+        try:
+            file_service = FileService()
+            details = await file_service.extract_text(file_contents)
+            details += manual_input
+            base_prompt = get_prompt(details)
+            prompt = base_prompt
+            # print(prompt)
+            MAX_RETRIES = 2
+
+            for attempt in range(MAX_RETRIES + 1):
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt
+                )
+                is_valid, result = self.validator.validate_gemini_response(response.text)
+                if is_valid:
+                    # await file_service.save_response(case_id, result)
+                    return result
+                
+                prompt = (
+                    base_prompt +
+                    "IMPORTANT: Your previous response was not valid JSON or did not match the required structure. "
+                    "Please respond ONLY with the correct JSON object as specified above, no extra text."
+                )
+
+            # If all retries failed
+            return {"error": f"Invalid Gemini response after {MAX_RETRIES + 1} attempts: {result}"}
+
+        except Exception as e:
+            return str(e)
 
     async def testgemini(self):
         # Generate content using the new API

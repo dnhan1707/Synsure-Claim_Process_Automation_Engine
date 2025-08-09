@@ -1,3 +1,5 @@
+from app.config.settings import get_settings
+from fastapi import UploadFile
 from typing import List
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
@@ -7,18 +9,20 @@ import json
 import boto3
 import os
 import io
+import uuid
 
 load_dotenv()
 
 class FileService():
     def __init__(self):
+        s3_setting = get_settings().s3
         self.s3_client = boto3.client(
-            service_name='s3',
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-            region_name=os.environ.get("AWS_REGION")
+            service_name=s3_setting.service_name,
+            aws_access_key_id=s3_setting.aws_access_key_id,
+            aws_secret_access_key=s3_setting.aws_secret_access_key,
+            region_name=s3_setting.region_name
         )
-        self.AWS_BUCKET_NAME = os.environ.get("AWS_BUCKET_NAME")
+        self.aws_bucket_name = s3_setting.bucket_name
 
 
     async def save(self, case_id: str, case_name: str, file_contents: list, texts: str):
@@ -34,13 +38,13 @@ class FileService():
 
                     self.s3_client.upload_fileobj(
                         io.BytesIO(file_info["content"]),
-                        self.AWS_BUCKET_NAME,
+                        self.aws_bucket_name,
                         s3_key
                     )
             if texts is not None and texts != "":
                 s3_key = f"{case_id}/texts_{timestamp}.txt"
                 self.s3_client.put_object(
-                    Bucket=self.AWS_BUCKET_NAME,
+                    Bucket=self.aws_bucket_name,
                     Key=s3_key,
                     Body=texts.encode("utf-8")
                 )
@@ -49,7 +53,7 @@ class FileService():
                 # print("saving name")
                 s3_key = f"{case_id}/case_name.txt"
                 self.s3_client.put_object(
-                    Bucket=self.AWS_BUCKET_NAME,
+                    Bucket=self.aws_bucket_name,
                     Key=s3_key,
                     Body=case_name.encode("utf-8")
                 )
@@ -69,7 +73,7 @@ class FileService():
                     response = json.dumps(response, ensure_ascii=False)
                 s3_key = f"{case_id}/response_{timestamp}.json"
                 self.s3_client.put_object(
-                    Bucket=self.AWS_BUCKET_NAME,
+                    Bucket=self.aws_bucket_name,
                     Key=s3_key,
                     Body=response.encode("utf-8")
                 )
@@ -81,7 +85,7 @@ class FileService():
     async def get_case_data(self, case_id: str):
         try:
             response = self.s3_client.list_objects_v2(
-                Bucket=self.AWS_BUCKET_NAME,
+                Bucket=self.aws_bucket_name,
                 Prefix=f"{case_id}/"
             )
 
@@ -96,7 +100,7 @@ class FileService():
                     # Only match .pdf at the end
                     if filename.lower().endswith(".pdf"):
                         pdf_bytes = io.BytesIO()
-                        self.s3_client.download_fileobj(self.AWS_BUCKET_NAME, key, pdf_bytes)
+                        self.s3_client.download_fileobj(self.aws_bucket_name, key, pdf_bytes)
                         pdf_bytes.seek(0)
                         files.append({
                             "filename": filename,
@@ -106,7 +110,7 @@ class FileService():
                     # Handle manual text file
                     elif filename.lower().startswith("texts_") and filename.lower().endswith(".txt"):
                         s3_obj = self.s3_client.get_object(
-                            Bucket=self.AWS_BUCKET_NAME,
+                            Bucket=self.aws_bucket_name,
                             Key=key
                         )
                         manual_text = s3_obj["Body"].read().decode("utf-8")
@@ -123,7 +127,7 @@ class FileService():
         """
         try:
             response = self.s3_client.list_objects_v2(
-                Bucket=self.AWS_BUCKET_NAME,
+                Bucket=self.aws_bucket_name,
                 Prefix=f"{case_id}/"
             )
             files = []
@@ -134,7 +138,7 @@ class FileService():
                     if filename:  # skip folder itself
                         url = self.s3_client.generate_presigned_url(
                             'get_object',
-                            Params={'Bucket': self.AWS_BUCKET_NAME, 'Key': key},
+                            Params={'Bucket': self.aws_bucket_name, 'Key': key},
                             ExpiresIn=expires_in
                         )
                         file_type = "pdf" if ".pdf" in filename.lower() else "text" if filename.lower().endswith(".txt") else "other"
@@ -151,7 +155,7 @@ class FileService():
     async def get_cases_info(self):
         try:
             response = self.s3_client.list_objects_v2(
-                Bucket=self.AWS_BUCKET_NAME,
+                Bucket=self.aws_bucket_name,
                 Prefix="",
                 Delimiter="/"
             )
@@ -165,7 +169,7 @@ class FileService():
                 case_name = ""
                 try:
                     s3_obj = self.s3_client.get_object(
-                        Bucket=self.AWS_BUCKET_NAME,
+                        Bucket=self.aws_bucket_name,
                         Key=f"{case_id}/case_name.txt"
                     )
                     case_name = s3_obj["Body"].read().decode("utf-8")
@@ -179,7 +183,6 @@ class FileService():
         except Exception as e:
             # print("S3 Error:", e)
             return []
-
 
 
     async def extract_text(self, file_contents: list) -> str:
@@ -203,7 +206,7 @@ class FileService():
             all_keys = []
             for case_id in case_ids:
                 response = self.s3_client.list_objects_v2(
-                    Bucket=self.AWS_BUCKET_NAME,
+                    Bucket=self.aws_bucket_name,
                     Prefix=f"{case_id}/"
                 )
                 if "Contents" in response:
@@ -211,7 +214,7 @@ class FileService():
             # Delete in batches of 1000
             for i in range(0, len(all_keys), 1000):
                 self.s3_client.delete_objects(
-                    Bucket=self.AWS_BUCKET_NAME,
+                    Bucket=self.aws_bucket_name,
                     Delete={"Objects": all_keys[i:i+1000]}
                 )
             return {"success": True, "deleted_keys": len(all_keys)}
@@ -223,7 +226,7 @@ class FileService():
         try:
             s3_key = f"{case_id}/case_name.txt"
             self.s3_client.put_object(
-                Bucket=self.AWS_BUCKET_NAME,
+                Bucket=self.aws_bucket_name,
                 Key=s3_key,
                 Body=case_name.encode("utf-8")
             )
@@ -236,7 +239,7 @@ class FileService():
         try:
             prefix = f"{case_id}/response_"
             response = self.s3_client.list_objects_v2(
-                Bucket=self.AWS_BUCKET_NAME,
+                Bucket=self.aws_bucket_name,
                 Prefix=prefix
             )
             if "Contents" not in response or not response["Contents"]:
@@ -246,9 +249,82 @@ class FileService():
             if not response_files:
                 return {"error": "No response files found"}
             latest_key = sorted(response_files)[-1]
-            s3_obj = self.s3_client.get_object(Bucket=self.AWS_BUCKET_NAME, Key=latest_key)
+            s3_obj = self.s3_client.get_object(Bucket=self.aws_bucket_name, Key=latest_key)
             content = s3_obj["Body"].read().decode("utf-8")
             return json.loads(content)
         except Exception as e:
             return {"error": str(e)}
     
+
+    async def create_text_file_and_save(self, content: str):
+        try:
+            random_id = str(uuid.uuid4())
+            s3_key = f"text_input{random_id}.txt"
+            self.s3_client.put_object(
+                Bucket=self.aws_bucket_name,
+                Key=s3_key,
+                Body=content.encode("utf-8")
+            )
+            return {"success": True, "s3_key": s3_key}
+
+        except Exception as e:
+            return {"error": str(e)}
+        
+    
+    async def save_files(self, files: List[UploadFile]):
+        try:
+            saved_keys = []
+            now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+            timestamp = now.strftime("%Y%m%dT%H%M%S")
+            for file_info in files:
+                await file_info.seek(0)  # Reset pointer before reading
+                content = await file_info.read()
+                # print(f"Uploading {file_info.filename}, size: {len(content)} bytes")
+                new_filename = f"{os.path.splitext(file_info.filename)[0]}_{timestamp}{os.path.splitext(file_info.filename)[1]}"
+                s3_key = new_filename
+                if content:
+                    self.s3_client.upload_fileobj(
+                        io.BytesIO(content),
+                        self.aws_bucket_name,
+                        s3_key
+                    )
+                else:
+                    print(f"Warning: {file_info.filename} is empty and will not be uploaded.")
+                saved_keys.append(s3_key)
+            return {"success": True, "s3_keys": saved_keys}
+        except Exception as e:
+            return {"error": str(e)}
+        
+    
+    async def save_respose_v2(self, response) -> str:
+        try:
+            now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+            timestamp = now.strftime("%Y%m%dT%H%M%S")
+            if response:
+                # Convert dict to JSON string if needed
+                if not isinstance(response, str):
+                    response = json.dumps(response, ensure_ascii=False)
+                s3_key = f"response_{timestamp}.json"
+                self.s3_client.put_object(
+                    Bucket=self.aws_bucket_name,
+                    Key=s3_key,
+                    Body=response.encode("utf-8")
+                )
+
+            return {"success": True, "s3_key": s3_key}
+        except Exception as e:
+            return {"error": str(e)}
+        
+
+    async def extract_content(self, s3_key: str):
+        try:
+            s3_obj = self.s3_client.get_object(
+                Bucket=self.aws_bucket_name,
+                Key=s3_key
+            )
+            content = s3_obj["Body"].read().decode("utf-8")
+            content_json = json.loads(content)
+            return content_json
+        
+        except Exception as e:
+            return {"error": str(e)}

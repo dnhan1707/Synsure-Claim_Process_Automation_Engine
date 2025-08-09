@@ -8,3 +8,4 @@ pydantic[email]
 dotenv
 python-multipart
 boto3
+supabase

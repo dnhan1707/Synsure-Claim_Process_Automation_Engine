@@ -14,9 +14,25 @@ class EmailSettings(BaseModel):
     demo_email_user: str = Field(default_factory=lambda: os.getenv("DEMO_EMAIL_USER"))
     demo_email_pass: str = Field(default_factory=lambda: os.getenv("DEMO_EMAIL_PASS"))
 
+
+class S3Settings(BaseModel):
+    service_name: str = Field(default="s3")
+    aws_access_key_id: str = Field(default_factory=lambda: os.getenv("AWS_ACCESS_KEY"))
+    aws_secret_access_key: str = Field(default_factory=lambda: os.getenv("AWS_SECRET_ACCESS_KEY"))
+    region_name: str = Field(default_factory=lambda: os.getenv("AWS_REGION"))
+    bucket_name: str = Field(default_factory=lambda: os.getenv("AWS_BUCKET_NAME"))
+
+
+class SupabaseSetting(BaseModel):
+    url: str = Field(default_factory=lambda: os.getenv("SUPABASE_URL"))
+    api_key: str = Field(default_factory=lambda: os.getenv("SUPABASE_API_KEY"))
+
+
 class Settings(BaseModel):
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
+    supabase: SupabaseSetting = Field(default_factory=SupabaseSetting)
+    s3: S3Settings = Field(default_factory=S3Settings)
 
 
 @lru_cache

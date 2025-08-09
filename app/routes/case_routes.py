@@ -18,6 +18,16 @@ def create_case_route() -> APIRouter:
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
+    @router.get("/{id}/latest-response")
+    async def get_latest_response(id: str):
+        try:
+            result = await case_controller.get_latest_response(id)
+            if "error" in result:
+                return JSONResponse({"success": False, "error": result["error"]}, status_code=404)
+            return JSONResponse({"success": True, "response": result}, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
     @router.get("/{id}")
     async def case_data(id: str):
         try:
@@ -90,17 +100,6 @@ def create_case_route() -> APIRouter:
             return JSONResponse({"success": True}, status_code=200)
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-
-    @router.get("/{id}/latest-response")
-    async def get_latest_response(id: str):
-        try:
-            result = await case_controller.get_latest_response(id)
-            if "error" in result:
-                return JSONResponse({"success": False, "error": result["error"]}, status_code=404)
-            return JSONResponse({"success": True, "response": result}, status_code=200)
-        except Exception as e:
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
+    
     return router
     
