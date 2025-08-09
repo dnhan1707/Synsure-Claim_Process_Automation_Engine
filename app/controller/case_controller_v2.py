@@ -152,17 +152,17 @@ class CaseControllerV2():
                 case_row = await self.sp_service.insert(table_name="case", object={"case_name": case_name})
                 case_id = case_row["id"] if case_row and "id" in case_row else None
                 result = await self.case_service.proceed_with_model(case_id, case_name, manual_input, files)
-                return result
+                return result, case_id
             
             else:
                 if manual_input or files:
                     result = await self.case_service.proceed_with_model(case_id, case_name, manual_input, files)
-                    return result
+                    return result, case_id
             
                 else:
                     # print("Proceed with history")
                     result = await self.case_service.proceed_with_model_history_files(case_id)
-                    return result
+                    return result, case_id
 
 
         except Exception as e:

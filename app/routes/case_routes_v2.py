@@ -52,12 +52,12 @@ def create_case_route_v2() -> APIRouter:
         files: List[UploadFile] = File(None),
     ):
         try:
-            result = await case_controller_v2.submit_one_case(
+            result, case_id = await case_controller_v2.submit_one_case(
                 case_id=case_id,
                 case_name=case_name,
                 manual_input=manual_input,
                 files=files)
-            return JSONResponse({"success": True, "result": result}, status_code=200)
+            return JSONResponse({"case_id": case_id,"success": True, "result": result}, status_code=200)
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
