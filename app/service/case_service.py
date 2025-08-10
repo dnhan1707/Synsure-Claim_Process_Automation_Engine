@@ -1,8 +1,8 @@
 from fastapi import UploadFile
 from typing import List, Optional
-from app.service.supabase import SupabaseService
-from app.service.file import FileService
-from app.service.model import ModelService
+from app.service.supabase_service import SupabaseService
+from app.service.s3_service import FileService
+from app.service.model_service import ModelService
 import io
 
 class CaseService:

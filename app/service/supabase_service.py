@@ -2,6 +2,7 @@ from app.config.settings import get_settings
 from supabase import Client, create_client
 from typing import Dict, Any, List
 
+
 class SupabaseService():
     def __init__(self):
         sp_setting = get_settings().supabase

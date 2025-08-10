@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from app.schema.schema import EmailRequest
-from app.service.email import EmailService
+from app.service.email_service import EmailService
 
 email_service = EmailService()
 
