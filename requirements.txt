@@ -10,3 +10,5 @@ python-multipart
 boto3
 supabase
 redis
+celery[redis]>=5.3
+flower>=2.0
