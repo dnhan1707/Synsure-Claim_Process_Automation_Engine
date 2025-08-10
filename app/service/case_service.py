@@ -1,9 +1,9 @@
-from fastapi import UploadFile
-from typing import List, Optional
+from app.celery_app import celery_app
 from app.service.supabase_service import SupabaseService
 from app.service.s3_service import FileService
 from app.service.model_service import ModelService
 from typing import List, Optional, Dict, Any
+from fastapi import UploadFile
 
 
 class CaseService:
@@ -84,6 +84,30 @@ class CaseService:
         if files_to_insert:
             await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
 
+
+    async def save_uploaded_files_from_contents(
+            self,
+            file_contents: List[Dict[str, Any]],
+            case_id: str,
+            case_name: str,
+            response_data_id: Optional[str],
+        ) -> List[dict]:
+            """
+            Uses already-read bytes to upload to S3 (no re-read of UploadFile).
+            """
+            files_keys_result = await self.file_service.save_files_from_bytes(items=file_contents)
+            files_keys = files_keys_result.get("s3_keys") if isinstance(files_keys_result, dict) else []
+            return [
+                {
+                    "case_id": case_id,
+                    "case_name": case_name,
+                    "s3_link": s3_key,
+                    "response_id": response_data_id,
+                }
+                for s3_key in files_keys
+            ]
+    
+
     async def proceed_with_model(
             self, 
             case_id: str, 
@@ -129,7 +153,7 @@ class CaseService:
         return response
 
 
-    async def proceed_with_model_history_files(self, case_id):
+    async def proceed_with_model_history_files(self, case_id: str):
         # Get file metadata from Supabase
         files_metadata = await self.sp_service.get_files_by_case_id(case_id)
 
@@ -190,30 +214,4 @@ class CaseService:
             await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
 
         return response
-
-
-    async def save_uploaded_files_from_contents(
-            self,
-            file_contents: List[Dict[str, Any]],
-            case_id: str,
-            case_name: str,
-            response_data_id: Optional[str],
-        ) -> List[dict]:
-            """
-            Uses already-read bytes to upload to S3 (no re-read of UploadFile).
-            """
-            files_keys_result = await self.file_service.save_files_from_bytes(items=file_contents)
-            files_keys = files_keys_result.get("s3_keys") if isinstance(files_keys_result, dict) else []
-            return [
-                {
-                    "case_id": case_id,
-                    "case_name": case_name,
-                    "s3_link": s3_key,
-                    "response_id": response_data_id,
-                }
-                for s3_key in files_keys
-            ]
-    
-
-
 
