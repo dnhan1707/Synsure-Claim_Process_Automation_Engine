@@ -9,3 +9,4 @@ dotenv
 python-multipart
 boto3
 supabase
+redis

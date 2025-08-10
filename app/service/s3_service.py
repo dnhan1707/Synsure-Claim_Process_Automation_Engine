@@ -1,7 +1,8 @@
 from app.config.settings import get_settings
+from typing import Dict, Any
+from app.service.caching_service import CachingService
 from fastapi import UploadFile
 from typing import List
-from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 from PyPDF2 import PdfReader
 import datetime
@@ -11,7 +12,6 @@ import os
 import io
 import uuid
 
-load_dotenv()
 
 class FileService():
     def __init__(self):
@@ -24,6 +24,8 @@ class FileService():
         )
         self.aws_bucket_name = s3_setting.bucket_name
 
+        # caching
+        self.caching_service = CachingService()
 
 
     async def extract_text(self, file_contents: list) -> str:
@@ -114,3 +116,71 @@ class FileService():
         
         except Exception as e:
             return {"error": str(e)}
+
+
+    async def extract_pdf_text_cached_from_s3(self, s3_key: str, ttl_seconds: int = 86400) -> str:
+        """
+        Returns extracted text for a PDF stored at s3_key.
+        Caches the result in Redis: pdf:text:{s3_key}
+        """
+        try:
+            cache_key = f"pdf:text:{s3_key}"
+            cached = self.caching_service.get_str(cache_key)
+            if isinstance(cached, str) and cached != "":
+                return cached
+
+            # cached miss
+            pdf_bytes = io.BytesIO()
+            self.s3_client.download_fileobj(self.aws_bucket_name, s3_key, pdf_bytes)
+            pdf_bytes.seek(0)
+
+            text = ""
+            try:
+                reader = PdfReader(pdf_bytes)
+                for page in reader.pages:
+                    text += page.extract_text() or ""
+            except Exception:
+                # if parsing fails, return empty string (don't cache failures)
+                return ""
+
+            # cache extracted text
+            self.caching_service.set_str(cache_key, text, ttl_seconds=ttl_seconds)
+            return text
+        except Exception:
+            return ""
+
+
+    async def save_files_from_bytes(self, items: List[Dict[str, Any]]):
+            """
+            Save already-read files to S3.
+            items: [{"filename": str, "content": bytes}, ...]
+            Returns: {"success": True, "s3_keys": [str, ...]} or {"error": "..."}
+            """
+            try:
+                if not items:
+                    return {"success": True, "s3_keys": []}
+
+                tz = ZoneInfo("America/Los_Angeles")
+                ts = datetime.datetime.now(tz).strftime("%Y%m%dT%H%M%S")
+                saved_keys: List[str] = []
+
+                for it in items:
+                    filename = (it.get("filename") or "").strip()
+                    content = it.get("content")
+                    if not filename or not content:
+                        continue
+
+                    base, ext = os.path.splitext(filename)
+                    new_name = f"{base}_{ts}{ext}" if base else f"upload_{ts}{ext or ''}"
+                    s3_key = new_name
+
+                    self.s3_client.put_object(
+                        Bucket=self.aws_bucket_name,
+                        Key=s3_key,
+                        Body=content
+                    )
+                    saved_keys.append(s3_key)
+
+                return {"success": True, "s3_keys": saved_keys}
+            except Exception as e:
+                return {"error": str(e)}

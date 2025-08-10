@@ -28,11 +28,18 @@ class SupabaseSetting(BaseModel):
     api_key: str = Field(default_factory=lambda: os.getenv("SUPABASE_API_KEY"))
 
 
+class RedisSetting(BaseModel):
+    host: str = Field(default_factory=lambda: os.getenv("REDIS_HOST"))
+    password: str = Field(default_factory=lambda: os.getenv("REDIS_PASSWORD"))
+    port: str = Field(default_factory=lambda: os.getenv("REDIS_PORT"))
+
+
 class Settings(BaseModel):
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
     supabase: SupabaseSetting = Field(default_factory=SupabaseSetting)
     s3: S3Settings = Field(default_factory=S3Settings)
+    redis: RedisSetting = Field(default_factory=RedisSetting)
 
 
 @lru_cache
