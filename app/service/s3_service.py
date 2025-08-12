@@ -44,10 +44,10 @@ class FileService():
             return f"Error extracting text: {e}"
          
          
-    async def create_text_file_and_save(self, content: str):
+    async def create_text_file_and_save(self, content: str, case_id: str):
         try:
             random_id = str(uuid.uuid4())
-            s3_key = f"text_input{random_id}.txt"
+            s3_key = f"{case_id}/text_input{random_id}.txt"
             self.s3_client.put_object(
                 Bucket=self.aws_bucket_name,
                 Key=s3_key,
@@ -59,7 +59,7 @@ class FileService():
             return {"error": str(e)}
         
     
-    async def save_files(self, files: List[UploadFile]):
+    async def save_files(self, files: List[UploadFile], case_id: str):
         try:
             saved_keys = []
             now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
@@ -68,7 +68,7 @@ class FileService():
                 await file_info.seek(0)  # Reset pointer before reading
                 content = await file_info.read()
                 # print(f"Uploading {file_info.filename}, size: {len(content)} bytes")
-                new_filename = f"{os.path.splitext(file_info.filename)[0]}_{timestamp}{os.path.splitext(file_info.filename)[1]}"
+                new_filename = f"{case_id}/{os.path.splitext(file_info.filename)[0]}_{timestamp}{os.path.splitext(file_info.filename)[1]}"
                 s3_key = new_filename
                 if content:
                     self.s3_client.upload_fileobj(
@@ -84,7 +84,7 @@ class FileService():
             return {"error": str(e)}
         
     
-    async def save_respose_v2(self, response) -> str:
+    async def save_respose_v2(self, response, case_id: str) -> str:
         try:
             now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
             timestamp = now.strftime("%Y%m%dT%H%M%S")
@@ -92,7 +92,7 @@ class FileService():
                 # Convert dict to JSON string if needed
                 if not isinstance(response, str):
                     response = json.dumps(response, ensure_ascii=False)
-                s3_key = f"response_{timestamp}.json"
+                s3_key = f"{case_id}/response_{timestamp}.json"
                 self.s3_client.put_object(
                     Bucket=self.aws_bucket_name,
                     Key=s3_key,
@@ -150,7 +150,7 @@ class FileService():
             return ""
 
 
-    async def save_files_from_bytes(self, items: List[Dict[str, Any]]):
+    async def save_files_from_bytes(self, items: List[Dict[str, Any]], case_id: str):
             """
             Save already-read files to S3.
             items: [{"filename": str, "content": bytes}, ...]
@@ -171,7 +171,7 @@ class FileService():
                         continue
 
                     base, ext = os.path.splitext(filename)
-                    new_name = f"{base}_{ts}{ext}" if base else f"upload_{ts}{ext or ''}"
+                    new_name = f"{case_id}/{base}_{ts}{ext}" if base else f"upload_{ts}{ext or ''}"
                     s3_key = new_name
 
                     self.s3_client.put_object(

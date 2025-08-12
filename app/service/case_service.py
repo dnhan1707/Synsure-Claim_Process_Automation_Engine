@@ -21,7 +21,7 @@ class CaseService:
             response_data_id: Optional[str]
         ) -> Optional[dict]:
 
-        s3_text_result = await self.file_service.create_text_file_and_save(content=manual_inputs)
+        s3_text_result = await self.file_service.create_text_file_and_save(content=manual_inputs, case_id=case_id)
         text_s3_key = s3_text_result.get("s3_key") if isinstance(s3_text_result, dict) else None
         if text_s3_key:
             return {
@@ -41,7 +41,7 @@ class CaseService:
             response_data_id: Optional[str]
         ) -> List[dict]:
 
-        files_keys_result = await self.file_service.save_files(files=files)
+        files_keys_result = await self.file_service.save_files(files=files, case_id=case_id)
         files_keys = files_keys_result.get("s3_keys") if isinstance(files_keys_result, dict) else []
         return [
             {
@@ -95,7 +95,7 @@ class CaseService:
             """
             Uses already-read bytes to upload to S3 (no re-read of UploadFile).
             """
-            files_keys_result = await self.file_service.save_files_from_bytes(items=file_contents)
+            files_keys_result = await self.file_service.save_files_from_bytes(items=file_contents, case_id=case_id)
             files_keys = files_keys_result.get("s3_keys") if isinstance(files_keys_result, dict) else []
             return [
                 {
@@ -130,7 +130,7 @@ class CaseService:
         )
 
         # Save response JSON to S3
-        response_saved_res = await self.file_service.save_respose_v2(response=response)
+        response_saved_res = await self.file_service.save_respose_v2(response=response, case_id=case_id)
         response_s3_key = response_saved_res.get("s3_key") if isinstance(response_saved_res, dict) else None
 
         # Save response row
@@ -188,7 +188,7 @@ class CaseService:
         )
 
         # Save response to S3
-        response_saved_res = await self.file_service.save_respose_v2(response=response)
+        response_saved_res = await self.file_service.save_respose_v2(response=response, case_id=case_id)
         response_s3_key = response_saved_res.get("s3_key") if isinstance(response_saved_res, dict) else None
 
         # Save response to Supabase

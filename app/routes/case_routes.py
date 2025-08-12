@@ -2,8 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Body
 from app.controller.case_controller import CaseControllerV2
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
-from app.tasks.case_tasks import process_case_history
-from app.service.task_service import get_task_status, get_tasks_status
+from app.service.task_service import get_task_status, get_tasks_status, submit_case_history
 from pydantic import BaseModel
 
 case_controller_v2 = CaseControllerV2()
@@ -106,8 +105,8 @@ def create_case_route() -> APIRouter:
     @router.post("/v2/submit/bulk", status_code=202)
     async def submit_bulk_v2(req: BulkSubmitRequest):
         """
-        Body: { "case_ids": ["id1","id2",...]}
-        Enqueues one Celery task per case_id and returns their IDs.
+        Body: { "case_ids": ["id1","id2",...] }
+        Enqueues in-process background jobs and returns their IDs.
         """
         case_ids = req.case_ids
         if not case_ids:
@@ -115,15 +114,14 @@ def create_case_route() -> APIRouter:
 
         accepted = []
         for cid in case_ids:
-            task = process_case_history.delay(str(cid))
-            accepted.append({"case_id": str(cid), "task_id": task.id})
+            task_id = submit_case_history(str(cid))
+            accepted.append({"case_id": str(cid), "task_id": task_id})
         return JSONResponse({"success": True, "accepted": accepted}, status_code=202)
-
 
     @router.get("/tasks/{task_id}")
     async def get_celery_task(task_id: str):
+        # now returns in-process task status
         return get_task_status(task_id)
-
 
     @router.post("/tasks/status")
     async def get_many_task_status(payload: Dict[str, Any] = Body(...)):
