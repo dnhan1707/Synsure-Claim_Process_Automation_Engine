@@ -171,7 +171,7 @@ class CaseService:
                 if text:
                     details_parts.append(text)
 
-            elif filename.startswith("texts_") and filename.endswith(".txt"):
+            elif filename.endswith(".txt"):
                 # Load manual input text once
                 s3_obj = self.file_service.s3_client.get_object(
                     Bucket=self.file_service.aws_bucket_name,

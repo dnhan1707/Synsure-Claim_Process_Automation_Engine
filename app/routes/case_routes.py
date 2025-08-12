@@ -26,7 +26,7 @@ def create_case_route() -> APIRouter:
             return JSONResponse({"success": False}, status_code=500)
         
         except Exception as e:
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+            return JSONResponse({"success": False, "result": [], "error": str(e)}, status_code=500)
 
 
     @router.get("/{case_id}")

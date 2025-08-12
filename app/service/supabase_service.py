@@ -57,7 +57,7 @@ class SupabaseService():
         try:
             response = (
                 self.sp_client.table(table_name)
-                .select("id", "case_name")
+                .select("id, case_name")
                 .eq("is_active", True)
                 .execute()
             )

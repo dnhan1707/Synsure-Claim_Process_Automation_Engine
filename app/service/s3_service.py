@@ -67,18 +67,31 @@ class FileService():
             for file_info in files:
                 await file_info.seek(0)  # Reset pointer before reading
                 content = await file_info.read()
-                # print(f"Uploading {file_info.filename}, size: {len(content)} bytes")
-                new_filename = f"{case_id}/{os.path.splitext(file_info.filename)[0]}_{timestamp}{os.path.splitext(file_info.filename)[1]}"
+                base, ext = os.path.splitext(file_info.filename or "")
+                new_filename = f"{case_id}/{base}_{timestamp}{ext}"
                 s3_key = new_filename
+
                 if content:
                     self.s3_client.upload_fileobj(
                         io.BytesIO(content),
                         self.aws_bucket_name,
                         s3_key
                     )
+                    saved_keys.append(s3_key)
+
+                    # Cache PDF text on first upload
+                    if ext.lower() == ".pdf":
+                        try:
+                            reader = PdfReader(io.BytesIO(content))
+                            text = ""
+                            for page in reader.pages:
+                                text += page.extract_text() or ""
+                            if text:
+                                self.caching_service.set_str(f"pdf:text:{s3_key}", text, ttl_seconds=86400)
+                        except Exception:
+                            pass
                 else:
                     print(f"Warning: {file_info.filename} is empty and will not be uploaded.")
-                saved_keys.append(s3_key)
             return {"success": True, "s3_keys": saved_keys}
         except Exception as e:
             return {"error": str(e)}
@@ -180,6 +193,18 @@ class FileService():
                         Body=content
                     )
                     saved_keys.append(s3_key)
+
+                    # Cache PDF text on first upload (from bytes we already have)
+                    if ext.lower() == ".pdf":
+                        try:
+                            reader = PdfReader(io.BytesIO(content))
+                            text = ""
+                            for page in reader.pages:
+                                text += page.extract_text() or ""
+                            if text:
+                                self.caching_service.set_str(f"pdf:text:{s3_key}", text, ttl_seconds=86400)
+                        except Exception:
+                            pass
 
                 return {"success": True, "s3_keys": saved_keys}
             except Exception as e:
