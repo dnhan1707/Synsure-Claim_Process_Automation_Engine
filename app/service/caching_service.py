@@ -10,7 +10,7 @@ class CachingService():
 
         self.redis = redis.Redis(
             host=redis_setting.host,
-            port=redis_setting.port,
+            port=int(redis_setting.port),
             password=redis_setting.password,
             decode_responses=True,
             username="default",

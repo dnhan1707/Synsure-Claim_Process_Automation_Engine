@@ -17,7 +17,7 @@ class CaseControllerV2():
             case_list = await self.sp_service.get_all_name_id(table_name="case")
             return case_list
         except Exception as e:
-            return {"success": True, "result": []}
+            return []
 
     async def get_latest_response(self, case_id):
         try:
