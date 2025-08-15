@@ -1,14 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, Form, Body
 from app.controller.case_controller import CaseControllerV2
-from fastapi.responses import JSONResponse
-from typing import List, Dict, Any
 from app.service.task_service import get_task_status, get_tasks_status, submit_case_history
-from pydantic import BaseModel
+from app.schema.schema import BulkSubmitRequest
+from typing import List, Dict, Any
+from fastapi.responses import JSONResponse
+from fastapi import APIRouter, UploadFile, File, Form, Body
 
 case_controller_v2 = CaseControllerV2()
-
-class BulkSubmitRequest(BaseModel):
-    case_ids: List[str]
 
 def create_case_route() -> APIRouter:
     router = APIRouter(
@@ -20,7 +17,6 @@ def create_case_route() -> APIRouter:
     async def get_all_cases():
         try:
             result = await case_controller_v2.get_cases()
-
             if result: 
                 return JSONResponse({"result": result}, status_code=200)
             return JSONResponse({"success": False}, status_code=500)
@@ -52,7 +48,7 @@ def create_case_route() -> APIRouter:
     @router.post("/save")
     async def save_case(
         case_id: str = Form(None),
-        case_name: str = Form(...),
+        case_name: str = Form(None),
         manual_input: str = Form(None),
         files: List[UploadFile] = File(None),
     ):
@@ -91,15 +87,15 @@ def create_case_route() -> APIRouter:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
-    @router.post("/submit/bulk")
-    async def submit_bulk(case_ids: List[str]):
-        try:
-            result = await case_controller_v2.submit_bulk(case_ids=case_ids)
-            if result.get("success"): 
-                return JSONResponse({"success": True}, status_code=200)
+    # @router.post("/submit/bulk")
+    # async def submit_bulk(case_ids: List[str]):
+    #     try:
+    #         result = await case_controller_v2.submit_bulk(case_ids=case_ids)
+    #         if result.get("success"): 
+    #             return JSONResponse({"success": True}, status_code=200)
 
-        except Exception as e:
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    #     except Exception as e:
+    #         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
     @router.post("/v2/submit/bulk", status_code=202)

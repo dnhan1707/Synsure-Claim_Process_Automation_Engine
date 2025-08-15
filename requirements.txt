@@ -12,3 +12,4 @@ supabase
 redis
 celery[redis]>=5.3
 flower>=2.0
+pydantic-settings

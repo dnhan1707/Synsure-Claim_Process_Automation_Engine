@@ -62,7 +62,7 @@ class CaseService:
         files: Optional[List[UploadFile]],
         response_data_id: Optional[str],
         file_contents: Optional[List[Dict[str, Any]]] = None
-    ):
+    ) -> None:
         
         files_to_insert = []
 

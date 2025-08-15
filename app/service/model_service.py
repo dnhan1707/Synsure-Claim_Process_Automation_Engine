@@ -20,7 +20,6 @@ class ModelService():
             details += manual_input
             base_prompt = get_prompt(details)
             prompt = base_prompt
-            # print(prompt)
             MAX_RETRIES = 2
 
             for attempt in range(MAX_RETRIES + 1):

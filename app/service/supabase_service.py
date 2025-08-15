@@ -103,7 +103,7 @@ class SupabaseService():
         try:
             response = (
                 self.sp_client.table("response")
-                .select("id", "s3_link", "created_at")
+                .select("id, s3_link, created_at")
                 .eq("case_id", case_id)
                 .order("created_at", desc=True)
                 .limit(1)
