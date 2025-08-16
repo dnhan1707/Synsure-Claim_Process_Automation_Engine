@@ -37,10 +37,10 @@ Synsure streamlines insurance claims by combining **AI, automation, and secure c
 ## ⚙️ Tech Stack  
 
 - **Backend:** FastAPI, Celery, Redis  
-- **Database:** PostgreSQL  
+- **Database:** Supabase  
 - **Storage:** AWS S3  
 - **Frontend:** Next.js, React, TypeScript  
-- **Deployment:** Docker, Render, Vercel  
+- **Deployment:**Render, Vercel  
 
 ---
 
