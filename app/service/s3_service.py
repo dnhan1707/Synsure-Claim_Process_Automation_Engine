@@ -117,7 +117,7 @@ class FileService():
             return {"error": str(e)}
         
 
-    async def extract_content(self, s3_key: str):
+    async def extract_content(self, s3_key: str) -> Any:
         try:
             s3_obj = self.s3_client.get_object(
                 Bucket=self.aws_bucket_name,

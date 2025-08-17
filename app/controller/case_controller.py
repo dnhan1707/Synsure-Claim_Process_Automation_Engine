@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from app.service.supabase_service import SupabaseService
 from app.service.s3_service import FileService
 from app.service.case_service import CaseService
@@ -11,7 +11,7 @@ class CaseControllerV2():
         self.case_service = CaseService()
         self.file_service =  FileService()
 
-    async def get_cases(self):
+    async def get_cases(self) -> List[Dict[str, Any]]:
         # return List[{id:..., case_name:...}]
         try:
             case_list = await self.sp_service.get_all_name_id(table_name="case")
@@ -19,7 +19,7 @@ class CaseControllerV2():
         except Exception as e:
             return []
 
-    async def get_latest_response(self, case_id):
+    async def get_latest_response(self, case_id: str) -> Dict[str, Any]:
         try:
             latest_response = await self.sp_service.get_latest_response_by_case_id(case_id)
             if not latest_response or not latest_response.get("s3_link"):
@@ -38,7 +38,7 @@ class CaseControllerV2():
             case_name: str, 
             manual_inputs: Optional[str], 
             files: Optional[List[UploadFile]]
-        ):
+        ) -> Dict[str, Any]:
         try:
             # If no case_id, create a new case
             if not case_id:
@@ -53,7 +53,7 @@ class CaseControllerV2():
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def update_case(self, case_id: str, new_case_name: str):
+    async def update_case(self, case_id: str, new_case_name: str) -> Dict[str, Any]:
         try:
             case_row = await self.sp_service.update(table_name="case", id=case_id, objects={"case_name": new_case_name})
             case_id = case_row["id"] if case_row and "id" in case_row else None
@@ -63,7 +63,7 @@ class CaseControllerV2():
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def delete(self, case_ids: List[str]):
+    async def delete(self, case_ids: List[str]) -> Dict[str, Any]:
         # update the is_active column to be False for all provided case_ids
         try:
             results = []
@@ -78,7 +78,7 @@ class CaseControllerV2():
         except Exception as e:
             return {"success": False, "error": str(e)}
         
-    async def get_case_files_links_supabase(self, case_id: str):
+    async def get_case_files_links_supabase(self, case_id: str) -> List[Dict[str, Any]]:
         try:
             files = await self.sp_service.get_files_by_case_id(case_id)
             result = []
@@ -123,7 +123,7 @@ class CaseControllerV2():
         case_name: Optional[str],
         manual_input: Optional[str],
         files: Optional[List[UploadFile]]
-    ):
+    ) -> Dict[str, Any]:
         try:
             '''
             if no case_id -> this is new case:
@@ -160,7 +160,6 @@ class CaseControllerV2():
                     return result, case_id
             
                 else:
-                    # print("Proceed with history")
                     result = await self.case_service.proceed_with_model_history_files(case_id)
                     return result, case_id
 
@@ -168,7 +167,7 @@ class CaseControllerV2():
         except Exception as e:
             return {"success": False, "error submit one case function": str(e)}
 
-    async def submit_bulk(self, case_ids: List[str]):
+    async def submit_bulk(self, case_ids: List[str]) -> Dict[str, Any]:
         try:
             for id in case_ids:
                 await self.case_service.proceed_with_model_history_files(id)

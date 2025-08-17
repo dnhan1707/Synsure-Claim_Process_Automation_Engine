@@ -1,4 +1,3 @@
-from app.celery_app import celery_app
 from app.service.supabase_service import SupabaseService
 from app.service.s3_service import FileService
 from app.service.model_service import ModelService
@@ -62,7 +61,7 @@ class CaseService:
         files: Optional[List[UploadFile]],
         response_data_id: Optional[str],
         file_contents: Optional[List[Dict[str, Any]]] = None
-    ):
+    ) -> None:
         
         files_to_insert = []
 
