@@ -33,15 +33,24 @@ class CaseService:
 
 
     async def save_uploaded_files(
-            self, 
-            files: List[UploadFile], 
-            case_id: str, 
-            case_name: str, 
-            response_data_id: Optional[str]
-        ) -> List[dict]:
+        self,
+        files: List[UploadFile],
+        case_id: str,
+        case_name: str,
+        response_data_id: Optional[str]
+    ) -> List[dict]:
 
         files_keys_result = await self.file_service.save_files(files=files, case_id=case_id)
-        files_keys = files_keys_result.get("s3_keys") if isinstance(files_keys_result, dict) else []
+
+        if isinstance(files_keys_result, dict):
+            files_keys = files_keys_result.get("s3_keys", []) 
+        else:
+            files_keys = []
+
+        # Extra hardening: ensure it's a list
+        if not isinstance(files_keys, list):
+            files_keys = []
+
         return [
             {
                 "case_id": case_id,
@@ -51,6 +60,7 @@ class CaseService:
             }
             for s3_key in files_keys
         ]
+
     
 
     async def save_manual_and_files(
