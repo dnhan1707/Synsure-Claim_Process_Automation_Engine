@@ -39,28 +39,27 @@ class CaseService:
         case_name: str,
         response_data_id: Optional[str]
     ) -> List[dict]:
-
-        files_keys_result = await self.file_service.save_files(files=files, case_id=case_id)
-
-        if isinstance(files_keys_result, dict):
-            files_keys = files_keys_result.get("s3_keys", []) 
-        else:
-            files_keys = []
-
-        # Extra hardening: ensure it's a list
-        if not isinstance(files_keys, list):
-            files_keys = []
-
-        return [
-            {
+        result = await self.file_service.save_files(files=files, case_id=case_id)
+        
+        # Add proper null/error checking
+        if not isinstance(result, dict) or "s3_keys" not in result:
+            return []
+        
+        s3_keys = result.get("s3_keys")
+        if not s3_keys:  
+            return []
+        
+        files_metadata = []
+        for s3_key in s3_keys:
+            files_metadata.append({
                 "case_id": case_id,
                 "case_name": case_name,
                 "s3_link": s3_key,
                 "response_id": response_data_id
-            }
-            for s3_key in files_keys
-        ]
-
+            })
+        
+        return files_metadata
+    
     
     async def save_uploaded_files_from_contents(
         self,
@@ -69,21 +68,27 @@ class CaseService:
         case_name: str,
         response_data_id: Optional[str],
     ) -> List[dict]:
-        """
-        Uses already-read bytes to upload to S3 (no re-read of UploadFile).
-        """
-        files_keys_result = await self.file_service.save_files_from_bytes(items=file_contents, case_id=case_id)
-        files_keys = files_keys_result.get("s3_keys") if isinstance(files_keys_result, dict) else []
-        return [
-            {
+        result = await self.file_service.save_files_from_bytes(items=file_contents, case_id=case_id)
+        
+        # Add proper null/error checking
+        if not isinstance(result, dict) or "s3_keys" not in result:
+            return []
+        
+        s3_keys = result.get("s3_keys")
+        if not s3_keys:  
+            return []
+        
+        files_metadata = []
+        for s3_key in s3_keys:
+            files_metadata.append({
                 "case_id": case_id,
                 "case_name": case_name,
                 "s3_link": s3_key,
-                "response_id": response_data_id,
-            }
-            for s3_key in files_keys
-        ]
-    
+                "response_id": response_data_id
+            })
+        
+        return files_metadata
+
 
     async def save_manual_and_files(
         self,
