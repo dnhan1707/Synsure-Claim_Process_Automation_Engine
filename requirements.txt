@@ -16,3 +16,5 @@ pydantic-settings
 pytest
 pytest-asyncio
 pytest-mock
+unittest
+pytest-cov
