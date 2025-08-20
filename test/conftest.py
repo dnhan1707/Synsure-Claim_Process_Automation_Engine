@@ -1,12 +1,17 @@
 import pytest
 from unittest.mock import AsyncMock
 from app.service.case_service import CaseService
+from app.service.s3_service import FileService
 
 
 @pytest.fixture
 def case_service():
     return CaseService()
 
+
+@pytest.fixture
+def file_service():
+    return FileService()
 
 # @pytest.fixture
 # def async_mock():
