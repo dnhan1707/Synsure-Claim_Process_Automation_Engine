@@ -1,8 +1,7 @@
 from app.config.settings import get_settings
-from typing import Dict, Any
+from typing import Dict, Any, List
 from app.service.caching_service import CachingService
 from fastapi import UploadFile
-from typing import List
 from zoneinfo import ZoneInfo
 from PyPDF2 import PdfReader
 import datetime
@@ -13,7 +12,7 @@ import io
 import uuid
 
 
-class FileService():
+class FileService:
     def __init__(self):
         s3_setting = get_settings().s3
         self.s3_client = boto3.client(
@@ -23,12 +22,10 @@ class FileService():
             region_name=s3_setting.region_name
         )
         self.aws_bucket_name = s3_setting.bucket_name
-
-        # caching
         self.caching_service = CachingService()
 
 
-    async def extract_text(self, file_contents: list) -> str:
+    async def extract_text(self, file_contents: List[Dict[str, Any]]) -> str:
         try:
             file_texts = []
             for file_info in file_contents:
@@ -38,84 +35,77 @@ class FileService():
                 for page in reader.pages:
                     text += page.extract_text() or ""
                 file_texts.append(text)
-            details = "".join(file_texts)
-            return details
+            return "".join(file_texts)
         except Exception as e:
             return f"Error extracting text: {e}"
-         
-         
-    async def create_text_file_and_save(self, content: str, case_id: str):
+
+
+    async def create_text_file_and_save(self, content: str, case_id: str) -> Dict[str, Any]:
         try:
-            random_id = str(uuid.uuid4())
-            s3_key = f"{case_id}/text_input{random_id}.txt"
+            s3_key = await self._generate_s3_key(case_id, '', 'text') 
             self.s3_client.put_object(
                 Bucket=self.aws_bucket_name,
                 Key=s3_key,
                 Body=content.encode("utf-8")
             )
             return {"success": True, "s3_key": s3_key}
-
         except Exception as e:
             return {"error": str(e)}
-        
-    
-    async def save_files(self, files: List[UploadFile], case_id: str):
+
+
+    async def save_files(self, files: List[UploadFile], case_id: str) -> Dict[str, Any]:
         try:
+            if not files:
+                return {"success": True, "s3_keys": []}
+
             saved_keys = []
-            now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
-            timestamp = now.strftime("%Y%m%dT%H%M%S")
+            timestamp = await self._generate_timestamp()
+            
             for file_info in files:
-                await file_info.seek(0)  # Reset pointer before reading
+                await file_info.seek(0)
                 content = await file_info.read()
-                base, ext = os.path.splitext(file_info.filename or "")
-                new_filename = f"{case_id}/{base}_{timestamp}{ext}"
-                s3_key = new_filename
-
-                if content:
-                    self.s3_client.upload_fileobj(
-                        io.BytesIO(content),
-                        self.aws_bucket_name,
-                        s3_key
-                    )
-                    saved_keys.append(s3_key)
-
-                    # Cache PDF text on first upload
-                    if ext.lower() == ".pdf":
-                        try:
-                            reader = PdfReader(io.BytesIO(content))
-                            text = ""
-                            for page in reader.pages:
-                                text += page.extract_text() or ""
-                            if text:
-                                self.caching_service.set_str(f"pdf:text:{s3_key}", text, ttl_seconds=86400)
-                        except Exception:
-                            pass
-                else:
+                
+                if not content:
                     print(f"Warning: {file_info.filename} is empty and will not be uploaded.")
+                    continue
+
+                s3_key = await self._generate_file_s3_key(case_id, file_info.filename or "", timestamp)
+                
+                # Upload to S3
+                self.s3_client.upload_fileobj(
+                    io.BytesIO(content),
+                    self.aws_bucket_name,
+                    s3_key
+                )
+                saved_keys.append(s3_key)
+
+                # Cache PDF text if applicable
+                await self._cache_pdf(content, s3_key)
+
             return {"success": True, "s3_keys": saved_keys}
         except Exception as e:
             return {"error": str(e)}
-        
-    
-    async def save_respose_v2(self, response, case_id: str) -> str:
+
+
+    async def save_respose_v2(self, response, case_id: str) -> Dict[str, Any]:
         try:
-            now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
-            timestamp = now.strftime("%Y%m%dT%H%M%S")
-            if response:
-                # Convert dict to JSON string if needed
-                if not isinstance(response, str):
-                    response = json.dumps(response, ensure_ascii=False)
-                s3_key = f"{case_id}/response_{timestamp}.json"
-                self.s3_client.put_object(
-                    Bucket=self.aws_bucket_name,
-                    Key=s3_key,
-                    Body=response.encode("utf-8")
-                )
+            if not response:
+                return {"error": "Empty response provided"}
+
+            # Convert to JSON string if needed
+            response_str = await self._prepare_response_content(response)
+            s3_key = await self._generate_s3_key(case_id, '', 'response')
+
+            self.s3_client.put_object(
+                Bucket=self.aws_bucket_name,
+                Key=s3_key,
+                Body=response_str.encode("utf-8")
+            )
 
             return {"success": True, "s3_key": s3_key}
         except Exception as e:
             return {"error": str(e)}
-        
+
 
     async def extract_content(self, s3_key: str) -> Any:
         try:
@@ -124,88 +114,121 @@ class FileService():
                 Key=s3_key
             )
             content = s3_obj["Body"].read().decode("utf-8")
-            content_json = json.loads(content)
-            return content_json
-        
+            return json.loads(content)
         except Exception as e:
             return {"error": str(e)}
 
 
     async def extract_pdf_text_cached_from_s3(self, s3_key: str, ttl_seconds: int = 86400) -> str:
-        """
-        Returns extracted text for a PDF stored at s3_key.
-        Caches the result in Redis: pdf:text:{s3_key}
-        """
         try:
             cache_key = f"pdf:text:{s3_key}"
-            cached = self.caching_service.get_str(cache_key)
-            if isinstance(cached, str) and cached != "":
+            cached = await self.caching_service.get_str(cache_key)
+            if isinstance(cached, str) and cached:
                 return cached
 
-            # cached miss
-            pdf_bytes = io.BytesIO()
-            self.s3_client.download_fileobj(self.aws_bucket_name, s3_key, pdf_bytes)
-            pdf_bytes.seek(0)
-
-            text = ""
-            try:
-                reader = PdfReader(pdf_bytes)
-                for page in reader.pages:
-                    text += page.extract_text() or ""
-            except Exception:
-                # if parsing fails, return empty string (don't cache failures)
-                return ""
-
-            # cache extracted text
-            self.caching_service.set_str(cache_key, text, ttl_seconds=ttl_seconds)
+            # Cache miss - download and extract
+            text = await self._extract_pdf_text_from_s3(s3_key)
+            if text:
+                await self.caching_service.set_str(cache_key, text, ttl_seconds=ttl_seconds)
+            
             return text
         except Exception:
             return ""
 
 
-    async def save_files_from_bytes(self, items: List[Dict[str, Any]], case_id: str):
-            """
-            Save already-read files to S3.
-            items: [{"filename": str, "content": bytes}, ...]
-            Returns: {"success": True, "s3_keys": [str, ...]} or {"error": "..."}
-            """
-            try:
-                if not items:
-                    return {"success": True, "s3_keys": []}
+    async def save_files_from_bytes(self, items: List[Dict[str, Any]], case_id: str) -> Dict[str, Any]:
+        try:
+            if not items:
+                return {"success": True, "s3_keys": []}
 
-                tz = ZoneInfo("America/Los_Angeles")
-                ts = datetime.datetime.now(tz).strftime("%Y%m%dT%H%M%S")
-                saved_keys: List[str] = []
+            timestamp = await self._generate_timestamp()
+            saved_keys: List[str] = []
 
-                for it in items:
-                    filename = (it.get("filename") or "").strip()
-                    content = it.get("content")
-                    if not filename or not content:
-                        continue
+            for item in items:
+                filename = (item.get("filename") or "").strip()
+                content = item.get("content")
+                
+                if not filename or not content:
+                    continue
 
-                    base, ext = os.path.splitext(filename)
-                    new_name = f"{case_id}/{base}_{ts}{ext}" if base else f"upload_{ts}{ext or ''}"
-                    s3_key = new_name
+                s3_key = await self._generate_file_s3_key(case_id, filename, timestamp)
 
-                    self.s3_client.put_object(
-                        Bucket=self.aws_bucket_name,
-                        Key=s3_key,
-                        Body=content
-                    )
-                    saved_keys.append(s3_key)
+                self.s3_client.put_object(
+                    Bucket=self.aws_bucket_name,
+                    Key=s3_key,
+                    Body=content
+                )
+                saved_keys.append(s3_key)
 
-                    # Cache PDF text on first upload (from bytes we already have)
-                    if ext.lower() == ".pdf":
-                        try:
-                            reader = PdfReader(io.BytesIO(content))
-                            text = ""
-                            for page in reader.pages:
-                                text += page.extract_text() or ""
-                            if text:
-                                self.caching_service.set_str(f"pdf:text:{s3_key}", text, ttl_seconds=86400)
-                        except Exception:
-                            pass
+                # Cache PDF text if applicable
+                await self._cache_pdf(content, s3_key)
 
-                return {"success": True, "s3_keys": saved_keys}
-            except Exception as e:
-                return {"error": str(e)}
+            return {"success": True, "s3_keys": saved_keys}
+        except Exception as e:
+            return {"error": str(e)}
+
+# -------------------------------------------------------- Helper ------------------------------------------
+    async def _generate_timestamp(self) -> str:
+        """Generate timestamp string for file naming."""
+        now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+        return now.strftime("%Y%m%dT%H%M%S")
+
+
+    async def _generate_s3_key(self, case_id: str, filename: str, file_type: str = "file") -> str:
+        """Generate S3 key based on file type."""
+        if file_type == "text":
+            random_id = str(uuid.uuid4())
+            return f"{case_id}/text_input{random_id}.txt"
+        elif file_type == "response":
+            timestamp = await self._generate_timestamp()
+            return f"{case_id}/response_{timestamp}.json"
+        else:
+            timestamp = await self._generate_timestamp()
+            base, ext = os.path.splitext(filename or "")
+            return f"{case_id}/{base}_{timestamp}{ext}" if base else f"upload_{timestamp}{ext or ''}"
+
+
+    async def _generate_file_s3_key(self, case_id: str, filename: str, timestamp: str) -> str:
+        """Generate S3 key for uploaded files with timestamp."""
+        base, ext = os.path.splitext(filename)
+        return f"{case_id}/{base}_{timestamp}{ext}" if base else f"upload_{timestamp}{ext or ''}"
+
+
+    async def _prepare_response_content(self, response) -> str:
+        """Convert response to JSON string if needed."""
+        if isinstance(response, str):
+            return response
+        return json.dumps(response, ensure_ascii=False)
+
+
+    async def _cache_pdf(self, content: bytes, s3_key: str) -> None:
+        """Extract PDF text and cache it."""
+        try:
+            if not s3_key.lower().endswith('.pdf'):
+                return
+
+            reader = PdfReader(io.BytesIO(content))
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() or ""
+            
+            if text:
+                await self.caching_service.set_str(f"pdf:text:{s3_key}", text, ttl_seconds=86400)
+        except Exception:
+            pass  # Fail silently for caching
+
+
+    async def _extract_pdf_text_from_s3(self, s3_key: str) -> str:
+        """Extract text from PDF stored in S3."""
+        try:
+            pdf_bytes = io.BytesIO()
+            self.s3_client.download_fileobj(self.aws_bucket_name, s3_key, pdf_bytes)
+            pdf_bytes.seek(0)
+
+            reader = PdfReader(pdf_bytes)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() or ""
+            return text
+        except Exception:
+            return ""
