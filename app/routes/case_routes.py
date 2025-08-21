@@ -1,6 +1,6 @@
 from app.controller.case_controller import CaseControllerV2
 from app.service.task_service import get_task_status, get_tasks_status, submit_case_history
-from app.schema.schema import BulkSubmitRequest
+from app.schema.schema import BulkSubmitRequest, BulkTaskStatusRequest
 from typing import List, Dict, Any
 from fastapi.responses import JSONResponse
 from fastapi import APIRouter, UploadFile, File, Form, Body
@@ -18,8 +18,8 @@ def create_case_route() -> APIRouter:
         try:
             result = await case_controller_v2.get_cases()
             if result: 
-                return JSONResponse({"result": result}, status_code=200)
-            return JSONResponse({"success": False}, status_code=500)
+                return JSONResponse({"result": result, "success": True, "count": len(result)}, status_code=200)
+            return JSONResponse({"result": result, "success": True, "count": len(result)}, status_code=500)
         
         except Exception as e:
             return JSONResponse({"success": False, "result": [], "error": str(e)}, status_code=500)
@@ -114,18 +114,18 @@ def create_case_route() -> APIRouter:
             accepted.append({"case_id": str(cid), "task_id": task_id})
         return JSONResponse({"success": True, "accepted": accepted}, status_code=202)
 
-    @router.get("/tasks/{task_id}")
-    async def get_celery_task(task_id: str):
-        # now returns in-process task status
-        return get_task_status(task_id)
+    # @router.get("/tasks/{task_id}")
+    # async def get_celery_task(task_id: str):
+    #     # now returns in-process task status
+    #     return get_task_status(task_id)
 
     @router.post("/tasks/status")
-    async def get_many_task_status(payload: Dict[str, Any] = Body(...)):
+    async def get_many_task_status(payload: BulkTaskStatusRequest):
         """
         Body: { "task_ids": ["...", "..."] }
         """
-        task_ids = payload.get("task_ids") or []
-        if not isinstance(task_ids, list) or not task_ids:
+        task_ids = payload.task_ids
+        if not task_ids:
             return JSONResponse({"success": False, "error": "task_ids required"}, status_code=400)
         return {"results": get_tasks_status(task_ids)}
 

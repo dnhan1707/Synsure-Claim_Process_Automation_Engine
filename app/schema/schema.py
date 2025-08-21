@@ -17,3 +17,6 @@ class CaseSubmission(BaseModel):
 
 class BulkSubmitRequest(BaseModel):
     case_ids: List[str]
+
+class BulkTaskStatusRequest(BaseModel):
+    task_ids: List[str]

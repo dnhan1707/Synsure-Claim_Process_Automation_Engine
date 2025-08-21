@@ -122,6 +122,7 @@ class FileService:
     async def extract_pdf_text_cached_from_s3(self, s3_key: str, ttl_seconds: int = 86400) -> str:
         try:
             cache_key = f"pdf:text:{s3_key}"
+            
             cached = await self.caching_service.get_str(cache_key)
             if isinstance(cached, str) and cached:
                 return cached
@@ -132,7 +133,7 @@ class FileService:
                 await self.caching_service.set_str(cache_key, text, ttl_seconds=ttl_seconds)
             
             return text
-        except Exception:
+        except Exception as e:
             return ""
 
 
@@ -214,8 +215,9 @@ class FileService:
             
             if text:
                 await self.caching_service.set_str(f"pdf:text:{s3_key}", text, ttl_seconds=86400)
-        except Exception:
-            pass  # Fail silently for caching
+        except Exception as e:
+            print(f"Error in _cache_pdf: {e}")
+            pass
 
 
     async def _extract_pdf_text_from_s3(self, s3_key: str) -> str:
