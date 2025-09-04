@@ -5,8 +5,16 @@ from typing import Dict, Any, List
 
 class SupabaseService():
     def __init__(self):
-        sp_setting = get_settings().supabase
-        url, key = sp_setting.url, sp_setting.api_key
+        setting = get_settings()
+        sp_setting = setting.supabase
+        url, key = "", ""
+
+        if setting.env and setting.env == "development":
+            url, key = sp_setting.url_development, sp_setting.api_key_development
+            print("using developemt supabase development")
+        else:
+            url, key = sp_setting.url, sp_setting.api_key
+
         self.sp_client: Client = create_client(url, key)
 
     
@@ -73,6 +81,7 @@ class SupabaseService():
                 self.sp_client.table("files")
                 .select("s3_link")
                 .eq("case_id", case_id)
+                .eq("is_active", True)
                 .execute()
             )
             # Deduplicate by s3_link
@@ -93,6 +102,7 @@ class SupabaseService():
                 self.sp_client.table("response")
                 .select("s3_link")
                 .eq("case_id", case_id)
+                .eq("is_active", True)
                 .execute()
             )
             return response.data if response.data else []
@@ -105,6 +115,7 @@ class SupabaseService():
                 self.sp_client.table("response")
                 .select("id, s3_link, created_at")
                 .eq("case_id", case_id)
+                .eq("is_active", True)
                 .order("created_at", desc=True)
                 .limit(1)
                 .execute()

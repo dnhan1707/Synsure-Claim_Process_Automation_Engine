@@ -21,11 +21,14 @@ class S3Settings(BaseModel):
     aws_secret_access_key: str = Field(default_factory=lambda: os.getenv("AWS_SECRET_ACCESS_KEY"))
     region_name: str = Field(default_factory=lambda: os.getenv("AWS_REGION"))
     bucket_name: str = Field(default_factory=lambda: os.getenv("AWS_BUCKET_NAME"))
+    bucket_name_development: str = Field(default_factory=lambda: os.getenv("AWS_BUCKET_NAME_DEVELOPMENT"))
 
 
 class SupabaseSetting(BaseModel):
     url: str = Field(default_factory=lambda: os.getenv("SUPABASE_URL"))
     api_key: str = Field(default_factory=lambda: os.getenv("SUPABASE_API_KEY"))
+    url_development: str = Field(default_factory=lambda: os.getenv("SUPABASE_URL_DEVELOPMENT"))
+    api_key_development: str = Field(default_factory=lambda: os.getenv("SUPABASE_API_KEY_DEVELOPMENT"))
 
 
 class RedisSetting(BaseModel):
@@ -35,6 +38,7 @@ class RedisSetting(BaseModel):
 
 
 class Settings(BaseModel):
+    env: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT"))
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
     supabase: SupabaseSetting = Field(default_factory=SupabaseSetting)

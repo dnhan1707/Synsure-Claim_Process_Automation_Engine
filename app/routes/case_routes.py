@@ -1,4 +1,5 @@
 from app.controller.case_controller import CaseControllerV2
+from app.controller.file_controller import FileController
 from app.service.task_service import get_task_status, get_tasks_status, submit_case_history
 from app.schema.schema import BulkSubmitRequest, BulkTaskStatusRequest
 from typing import List, Dict, Any
@@ -6,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi import APIRouter, UploadFile, File, Form, Body
 
 case_controller_v2 = CaseControllerV2()
+file_controller = FileController()
 
 def create_case_route() -> APIRouter:
     router = APIRouter(
@@ -28,7 +30,7 @@ def create_case_route() -> APIRouter:
     @router.get("/{case_id}")
     async def case_data(case_id: str):
         try:
-            files = await case_controller_v2.get_case_files_links_supabase(case_id=case_id)
+            files = await file_controller.get_case_files_links_supabase(case_id=case_id)
             return JSONResponse({"files": files}, status_code=200)
         except Exception as e:
             return JSONResponse({"files": [], "error": str(e)}, status_code=500)

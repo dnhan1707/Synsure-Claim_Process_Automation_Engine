@@ -78,45 +78,7 @@ class CaseControllerV2():
         except Exception as e:
             return {"success": False, "error": str(e)}
         
-    async def get_case_files_links_supabase(self, case_id: str) -> List[Dict[str, Any]]:
-        try:
-            files = await self.sp_service.get_files_by_case_id(case_id)
-            result = []
-            for file in files:
-                s3_key = file.get("s3_link", "")
-                filename = s3_key.split("/")[-1]
-                url = self.file_service.s3_client.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': self.file_service.aws_bucket_name, 'Key': s3_key},
-                    ExpiresIn=3600
-                )
-                file_type = "pdf" if filename.lower().endswith(".pdf") else "text" if filename.lower().endswith(".txt") else "other"
-                result.append({
-                    "filename": filename,
-                    "url": url,
-                    "type": file_type
-                })
 
-            responses = await self.sp_service.get_responses_by_case_id(case_id)
-            for resp in responses:
-                s3_key = resp.get("s3_link", "")
-                filename = s3_key.split("/")[-1]
-                url = self.file_service.s3_client.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': self.file_service.aws_bucket_name, 'Key': s3_key},
-                    ExpiresIn=3600
-                )
-                file_type = "response_json" if filename.lower().endswith(".json") else "other"
-                result.append({
-                    "filename": filename,
-                    "url": url,
-                    "type": file_type
-                })
-
-            return result
-        except Exception as e:
-            return []
-        
     async def submit_one_case(
         self,
         case_id: Optional[str],

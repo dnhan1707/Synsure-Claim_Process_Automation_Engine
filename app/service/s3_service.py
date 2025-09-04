@@ -14,14 +14,19 @@ import uuid
 
 class FileService:
     def __init__(self):
-        s3_setting = get_settings().s3
+        setting = get_settings()
+        s3_setting = setting.s3
         self.s3_client = boto3.client(
             service_name=s3_setting.service_name,
             aws_access_key_id=s3_setting.aws_access_key_id,
             aws_secret_access_key=s3_setting.aws_secret_access_key,
             region_name=s3_setting.region_name
         )
-        self.aws_bucket_name = s3_setting.bucket_name
+        if setting.env and setting.env.lower() == "development":
+            self.aws_bucket_name = s3_setting.bucket_name_development or s3_setting.bucket_name
+        else: 
+            self.aws_bucket_name = s3_setting.bucket_name
+
         self.caching_service = CachingService()
 
 
