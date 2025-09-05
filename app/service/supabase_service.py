@@ -11,7 +11,7 @@ class SupabaseService():
 
         if setting.env and setting.env == "development":
             url, key = sp_setting.url_development, sp_setting.api_key_development
-            print("using developemt supabase development")
+            # print("using developemt supabase development")
         else:
             url, key = sp_setting.url, sp_setting.api_key
 
@@ -79,7 +79,7 @@ class SupabaseService():
         try:
             response = (
                 self.sp_client.table("files")
-                .select("s3_link")
+                .select("id, s3_link, case_name, is_active")
                 .eq("case_id", case_id)
                 .eq("is_active", True)
                 .execute()
@@ -100,7 +100,7 @@ class SupabaseService():
         try:
             response = (
                 self.sp_client.table("response")
-                .select("s3_link")
+                .select("id, s3_link, case_id, is_active")
                 .eq("case_id", case_id)
                 .eq("is_active", True)
                 .execute()
@@ -113,7 +113,7 @@ class SupabaseService():
         try:
             response = (
                 self.sp_client.table("response")
-                .select("id, s3_link, created_at")
+                .select("id, s3_link, created_at, is_active")
                 .eq("case_id", case_id)
                 .eq("is_active", True)
                 .order("created_at", desc=True)

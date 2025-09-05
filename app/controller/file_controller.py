@@ -52,40 +52,29 @@ class FileController:
         except Exception as e:
             return []
         
-    # NOTE: We cannot really remove files since response files are relying on them
-    # however we can still remove the response file but need re-consideration
 
-    # async def remove_files(self, file_id: str) -> bool:
-    #     try:
-    #         res = self.sp_service.update(
-    #             table_name="files",
-    #             id=file_id,
-    #             objects={
-    #                 "is_active": False
-    #             }
-    #         )
+    async def remove_files(self, file_id: str) -> bool:
+        """Set file record as inactive"""
+        try:
+            result = await self.sp_service.update(
+                table_name="files",
+                id=file_id,
+                objects={"is_active": False}
+            )
+            return result is not None
+        except Exception as e:
+            print(f"Error removing file {file_id}: {e}")
+            return False
 
-    #         if not res:
-    #             return False
-    #         return True
-
-    #     except Exception as e:
-    #         return False
-        
-    
-    # async def remove_response(self, file_id: str) -> bool:
-    #     try:
-    #         res = self.sp_service.update(
-    #             table_name="files",
-    #             id=file_id
-    #             objects={
-    #                 "is_active": False
-    #             }
-    #         )
-
-    #         if not res:
-    #             return False
-    #         return True
-
-    #     except Exception as e:
-    #         return False
+    async def remove_response(self, file_id: str) -> bool:
+        """Set response record as inactive"""
+        try:
+            result = await self.sp_service.update(
+                table_name="response",
+                id=file_id,
+                objects={"is_active": False}
+            )
+            return result is not None
+        except Exception as e:
+            print(f"Error removing response {file_id}: {e}")
+            return False

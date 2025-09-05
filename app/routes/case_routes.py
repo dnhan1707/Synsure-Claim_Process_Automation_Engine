@@ -166,4 +166,35 @@ def create_case_route() -> APIRouter:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
     
     
+    
+    @router.delete("/files/{file_id}")
+    async def delete_file(file_id: str):
+        """Delete a file record"""
+        try:
+            result = await file_controller.remove_files(file_id)
+            if not result:
+                return JSONResponse(
+                    {"success": False, "error": "Failed to delete file"}, 
+                    status_code=500
+                )
+
+            return JSONResponse({"success": True, "message": "File deleted successfully"}, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+    @router.delete("/responses/{file_id}")
+    async def delete_response_file(file_id: str):
+        """Delete a response file record"""
+        try:
+            result = await file_controller.remove_response(file_id)
+            if not result:
+                return JSONResponse(
+                    {"success": False, "error": "Failed to delete response file"}, 
+                    status_code=500
+                )
+
+            return JSONResponse({"success": True, "message": "Response file deleted successfully"}, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        
     return router

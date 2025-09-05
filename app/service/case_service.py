@@ -224,16 +224,13 @@ class CaseService:
 
 
     async def _link_existing_files_to_response(self, files_metadata: List[Dict], case_id: str, response_data_id: str) -> None:
-        """Link existing files to a new response."""
-        files_to_insert = []
-        for file in files_metadata:
-            files_to_insert.append({
-                "case_id": case_id,
-                "case_name": file.get("case_name"),
-                "s3_link": file.get("s3_link"),
-                "response_id": response_data_id
-            })
-        
-        if files_to_insert:
-            await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
-
+        """Link existing files to a new response by updating their response_id."""
+        for file_metadata in files_metadata:
+            file_id = file_metadata.get("id")
+            if file_id:
+                # Update existing file record to link to new response
+                await self.sp_service.update(
+                    table_name="files",
+                    id=file_id,
+                    objects={"response_id": response_data_id}
+                )
