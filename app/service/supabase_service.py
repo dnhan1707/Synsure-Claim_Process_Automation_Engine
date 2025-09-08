@@ -75,6 +75,7 @@ class SupabaseService():
         except Exception as e:
             return {"error": str(e)}
     
+
     async def get_files_by_case_id(self, case_id: str):
         try:
             response = (
@@ -96,6 +97,7 @@ class SupabaseService():
         except Exception as e:
             return []
 
+
     async def get_responses_by_case_id(self, case_id: str):
         try:
             response = (
@@ -109,6 +111,7 @@ class SupabaseService():
         except Exception as e:
             return []
         
+
     async def get_latest_response_by_case_id(self, case_id: str):
         try:
             response = (
@@ -127,3 +130,38 @@ class SupabaseService():
         
         except Exception as e:
             return {"error": str(e)}
+
+
+    async def get_all(self, table_name: str, columns: str):
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(columns)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data
+
+            return None
+
+        except Exception as e:
+            print("Supabase Service Error - get_all", e)
+            return None
+    
+    async def get_row_by_id(self, id: str, table_name: str, columns: str):
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(columns)
+                .eq("id", id)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+
+            return None
+
+        except Exception as e:
+            print("Supabase Service Error - get_all", e)
+            return None
+    
