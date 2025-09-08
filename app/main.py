@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.email_routes import create_email_route
 from app.routes.case_routes import create_case_route
+from app.routes.tenant_routes import create_tenant_routes
 from app.config.security import security_setting
 from app.config.dependencies import require_api_key
 
@@ -19,6 +20,8 @@ def create_application() -> FastAPI:
 
         app.include_router(create_email_route(), dependencies=[Depends(require_api_key)])
         app.include_router(create_case_route(), dependencies=[Depends(require_api_key)])
+        app.include_router(create_tenant_routes(), dependencies=[Depends(require_api_key)])
+
         return app
 
 app = create_application()

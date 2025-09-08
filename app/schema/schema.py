@@ -20,3 +20,6 @@ class BulkSubmitRequest(BaseModel):
 
 class BulkTaskStatusRequest(BaseModel):
     task_ids: List[str]
+
+class TenantCreationRequest(BaseModel):
+    tanant_name: str
