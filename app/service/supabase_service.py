@@ -132,6 +132,23 @@ class SupabaseService():
             return {"error": str(e)}
 
 
+    async def get_all_files(self, table_name: str, case_id: str, tenant_id: str, columns: str):
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(columns)
+                .eq("case_id", case_id)
+                .eq("tenant_id", tenant_id)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data
+
+            return None
+
+        except Exception as e:
+            return None
+
     async def get_all(self, table_name: str, columns: str):
         try:
             response = (

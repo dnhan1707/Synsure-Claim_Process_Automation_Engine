@@ -2,7 +2,7 @@ import logging
 from app.service.supabase_service import SupabaseService
 from app.schema.schema import CaseStatus
 from fastapi import UploadFile, File, Form
-from typing import List
+from typing import List, Dict, Any
 import uuid
 import boto3
 from app.config.settings import get_settings
@@ -115,3 +115,73 @@ class ClaimManagerService:
                         tenant_id, name, str(e), exc_info=True)
             return False
         
+
+    async def get_claim_by_id(self, id: str) -> Dict[str, Any]:
+        try:
+            general_data = await self.sp_service.get_row_by_id(
+                id=id,
+                table_name="cases",
+                columns="id, tenant_id, case_name, status"
+            )
+            if not general_data:
+                logger.warning("No case found with id: %s", id)
+                return {}
+            
+            tenant_id = general_data["tenant_id"]
+
+            related_files = await self.sp_service.get_all_files(
+                table_name="files",
+                case_id=id,
+                tenant_id=tenant_id,
+                columns="id, name, kind, s3_bucket, s3_key, uploaded_at"
+            )
+            files_with_urls = []
+            if related_files:
+                for file in related_files:
+                    try:
+                        presigned_url = self.s3_client.generate_presigned_url(
+                            "get_object",
+                            Params={
+                                "Bucket": file["s3_bucket"],
+                                "Key": file["s3_key"]
+                            },
+                            ExpiresIn=900
+                        )
+                        files_with_urls.append({
+                            "id": file["id"],
+                            "name": file["name"],
+                            "kind": file["kind"],
+                            "uploaded_at": file["uploaded_at"],
+                            "download_url": presigned_url
+                        })
+
+                    except Exception as e:
+                        logger.error("Could not generate presigned URL for file %s: %s", file["id"], str(e))
+
+            return {
+                "id": general_data["id"],
+                "case_name": general_data["case_name"],
+                "status": general_data["status"],
+                "files": files_with_urls   
+                }   
+
+        except Exception as e:
+            logger.error("Error get_claim_by_id")
+            return {}
+
+
+    async def get_all_claim(self) -> List[Dict[str, Any]]:
+        try:
+            res = await self.sp_service.get_all(
+                table_name="cases",
+                columns="id, tenant_id, case_name, status"
+            )
+            if not res:
+                logger.error("Error get_all_claim either empty or None")
+                return []
+
+            return res
+
+        except Exception as e:
+            logger.error("Error get_all_claim")
+            return []

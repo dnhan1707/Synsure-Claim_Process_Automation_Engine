@@ -1,6 +1,6 @@
 import logging
-from fastapi import UploadFile, File, Form
-from typing import List
+from fastapi import UploadFile, File
+from typing import List, Dict, Any
 from app.service.claim_manager_service import ClaimManagerService
 
 logger = logging.getLogger(__name__)
@@ -39,3 +39,32 @@ class ClaimManagerController:
         except Exception as e:
             logger.error("Error in create_new_claim for tenant_id: %s, case_name: %s - %s", tenant_id, case_name, str(e), exc_info=True)
             return False
+        
+
+    async def get_claim_by_id(self, id: str) -> Dict[str, Any]:
+        try:
+            res = await self.claim_manager_service.get_claim_by_id(id)
+            if not res:
+                logger.error("Error in get_claim_by_id, either None or crash")
+                return {}
+
+            return res
+
+        except Exception as e:
+            logger.error("Error in get_claim_by_id for id: %s, case_name: %s - %s", id, str(e), exc_info=True)
+            return False
+
+
+    async def get_all_claim(self) -> List[Dict[str, Any]]:
+        try:
+            res = await self.claim_manager_service.get_all_claim()
+            if not res:
+                logger.error("Error in get_all_claim, either None or crash")
+                return []
+
+            return res
+
+        except Exception as e:
+            logger.error("Error in get_all_claim", str(e), exc_info=True)
+            return []
+

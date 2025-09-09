@@ -35,12 +35,30 @@ def create_claim_manager_routes() -> APIRouter:
             return JSONResponse({"success": False, "error": e}, status_code=500) 
 
     
-    async def get_claim(id: str):
-        pass
+    @router.get("/{id}")
+    async def get_claim_by_id(id: str):
+        try:
+            res = await claim_manager_controller.get_claim_by_id(id)
+            if not res:
+                return JSONResponse({"success": False, "result": {}, "error": "get_claim_by_id"}, status_code=500) 
 
-    
-    async def get_all_claims():
-        pass
+            return JSONResponse({"success": True, "result": res}, status_code=200)
+
+        except Exception as e:
+            return JSONResponse({"success": False, "result": {}, "error": e}, status_code=500) 
+
+
+    @router.get("/")
+    async def get_all_claim():
+        try:
+            res = await claim_manager_controller.get_all_claim()
+            if not res:
+                return JSONResponse({"success": False, "result": [], "error": "get_claim_by_id"}, status_code=500) 
+
+            return JSONResponse({"success": True, "result": res}, status_code=200)
+
+        except Exception as e:
+            return JSONResponse({"success": False, "result": [], "error": e}, status_code=500) 
 
     
     async def update_claim_name(id: str, new_name: str):
