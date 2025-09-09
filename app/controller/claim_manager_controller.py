@@ -13,17 +13,23 @@ class ClaimManagerController:
         self,
         tenant_id: str,
         case_name: str,
-        manual_input: str = Form(None),
         files: List[UploadFile] = File(None)
     ) -> bool:
 
         try:
             res = None
 
-            if not manual_input and not files:
+            if not files:
                 res = await self.claim_manager_service.create_empty_claim(
                     tenant_id=tenant_id,
                     name=case_name
+                )
+
+            elif files:
+                res = await self.claim_manager_service.create_claim(
+                    tenant_id=tenant_id,
+                    name=case_name,
+                    files=files
                 )
 
             if not res:

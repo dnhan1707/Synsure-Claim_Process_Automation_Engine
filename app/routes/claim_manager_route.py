@@ -17,7 +17,6 @@ def create_claim_manager_routes() -> APIRouter:
     async def create_new_claim(
         tenant_id: str,
         case_name: str,
-        manual_input: str = Form(None),
         files: List[UploadFile] = File(None)
     ):
         # create and upload files, if no files. just create a case
@@ -25,7 +24,6 @@ def create_claim_manager_routes() -> APIRouter:
             res = await claim_manager_controller.create_new_claim(
                 tenant_id=tenant_id,
                 case_name=case_name,
-                manual_input=manual_input,
                 files=files
             )
             if not res:
