@@ -1,7 +1,7 @@
 from fastapi import UploadFile, File, Form, Body
 from pydantic import BaseModel, EmailStr
 from typing import List
-
+from enum import Enum
 
 class EmailRequest(BaseModel):
     name: str
@@ -23,3 +23,9 @@ class BulkTaskStatusRequest(BaseModel):
 
 class TenantCreationRequest(BaseModel):
     tanant_name: str
+
+class CaseStatus(str, Enum):
+    open = "open"
+    processing = "processing"
+    closed = "closed"
+    archived = "archived"
