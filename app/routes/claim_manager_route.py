@@ -53,7 +53,7 @@ def create_claim_manager_routes() -> APIRouter:
         try:
             res = await claim_manager_controller.get_all_claim()
             if not res:
-                return JSONResponse({"success": False, "result": [], "error": "get_claim_by_id"}, status_code=500) 
+                return JSONResponse({"success": False, "result": [], "error": "get_all_claim"}, status_code=500) 
 
             return JSONResponse({"success": True, "result": res}, status_code=200)
 
@@ -61,32 +61,112 @@ def create_claim_manager_routes() -> APIRouter:
             return JSONResponse({"success": False, "result": [], "error": e}, status_code=500) 
 
     
+    @router.patch("/{id}")
     async def update_claim_name(id: str, new_name: str):
-        pass
+        try:
+            res = await claim_manager_controller.update_claim_name(id, new_name)
+            if not res:
+                return JSONResponse({"success": False, "error": "update_claim_name"}, status_code=500) 
+
+            return JSONResponse({"success": True}, status_code=200)
+
+        except Exception as e:
+            return JSONResponse({"success": False, "error": e}, status_code=500) 
 
     
+    @router.post("/{tenant_id}/{case_id}")
     async def upload_files_existed_case(
-        id: str,         
-        manual_input: str = Form(None),
-        files: List[UploadFile] = File(None)
+        tenant_id: str,
+        case_id: str,         
+        files: List[UploadFile] = File(...)
     ):
-        pass
+        try:
+            res = await claim_manager_controller.upload_files_existed_case(tenant_id, case_id, files)
+            if not res:
+                return JSONResponse({"success": False, "error": "upload_files_existed_case"}, status_code=500) 
+
+            return JSONResponse({"success": True}, status_code=200)
+
+        except Exception as e:
+            return JSONResponse({"success": False, "error": e}, status_code=500) 
+
     
     
+    @router.put("/{tenant_id}/{case_id}/{file_id}")
     async def replace_existed_file(
-        id: str,
+        tenant_id: str,
+        case_id: str,
         file_id: str,
         new_file: UploadFile
     ):
-        pass
+        try:
+            res = await claim_manager_controller.replace_existed_file(tenant_id, case_id, file_id, new_file)
+            if not res:
+                return JSONResponse({"success": False, "error": "replace_existed_file"}, status_code=500) 
+
+            return JSONResponse({"success": True}, status_code=200)
+
+        except Exception as e:
+            return JSONResponse({"success": False, "error": e}, status_code=500) 
 
     
-    async def remove_files(ids: List[str]):
-        pass
-
     
-    async def remove_case(id: str):
-        pass
+    @router.delete("/files")
+    async def remove_files(file_ids: List[str]):
+        """
+        Remove multiple files by their IDs
+        Request body: ["file_id_1", "file_id_2", "file_id_3"]
+        """
+        try:            
+            if not file_ids:
+                return JSONResponse(
+                    {"success": False, "error": "No file IDs provided"}, 
+                    status_code=400
+                )
+            
+            res = await claim_manager_controller.remove_files(file_ids)
+            if not res:
+                return JSONResponse(
+                    {"success": False, "error": "Failed to remove some or all files"}, 
+                    status_code=500
+                ) 
+
+            return JSONResponse(
+                {"success": True, "message": f"Successfully deleted {len(file_ids)} files"}, 
+                status_code=200
+            )
+
+        except Exception as e:
+            return JSONResponse(
+                {"success": False, "error": "Internal server error"}, 
+                status_code=500
+            ) 
+
+
+    @router.delete("/{case_id}")
+    async def remove_case(case_id: str):
+        """
+        Remove a case and all its associated files
+        """
+        try:            
+            res = await claim_manager_controller.remove_case(case_id)
+            if not res:
+                return JSONResponse(
+                    {"success": False, "error": "Failed to remove case"}, 
+                    status_code=500
+                ) 
+
+            return JSONResponse(
+                {"success": True, "message": "Case successfully deleted"}, 
+                status_code=200
+            )
+
+        except Exception as e:
+            return JSONResponse(
+                {"success": False, "error": "Internal server error"}, 
+                status_code=500
+            )
+
 
 
 

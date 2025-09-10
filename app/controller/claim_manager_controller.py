@@ -68,3 +68,82 @@ class ClaimManagerController:
             logger.error("Error in get_all_claim", str(e), exc_info=True)
             return []
 
+
+    async def update_claim_name(self, id: str, new_name: str) -> bool:
+        try:
+            res = await self.claim_manager_service.update_claim_name(id, new_name)
+
+            if not res:
+                return False
+            
+            return True
+        
+        except Exception as e:
+            logger.error("Error in update_claim_name: ", str(e), exc_info=True)
+            return False
+
+
+    async def upload_files_existed_case(self, tenant_id: str, case_id: str, files: List[UploadFile]) -> bool:
+        try:
+            res = await self.claim_manager_service.upload_files_existed_case(tenant_id, case_id, files)
+
+            if not res:
+                return False
+            
+            return True
+
+        except Exception as e:
+            logger.error("Error in update_claim_name: ", str(e), exc_info=True)
+            return False
+
+    async def replace_existed_file(self, tenant_id: str, case_id: str, file_id: str, new_file: UploadFile) -> bool:
+        try:
+            res = await self.claim_manager_service.replace_existed_file(tenant_id, case_id, file_id, new_file)
+
+            if not res:
+                return False
+            
+            return True
+
+        except Exception as e:
+            logger.error("Error in update_claim_name: ", str(e), exc_info=True)
+            return False
+
+
+    async def remove_files(self, file_ids: List[str]) -> bool:
+        """
+        Remove multiple files by their IDs
+        """
+        try:
+            logger.info("Controller: Removing %d files", len(file_ids))
+            
+            res = await self.claim_manager_service.remove_files(file_ids)
+            if not res:
+                logger.warning("Failed to remove files: %s", file_ids)
+                return False
+            
+            logger.info("Successfully removed files: %s", file_ids)
+            return True
+            
+        except Exception as e:
+            logger.error("Error in remove_files for file_ids: %s - %s", file_ids, str(e), exc_info=True)
+            return False
+
+    async def remove_case(self, case_id: str) -> bool:
+        """
+        Remove a case and all its associated files
+        """
+        try:
+            logger.info("Controller: Removing case %s", case_id)
+            
+            res = await self.claim_manager_service.remove_case(case_id)
+            if not res:
+                logger.warning("Failed to remove case: %s", case_id)
+                return False
+            
+            logger.info("Successfully removed case: %s", case_id)
+            return True
+            
+        except Exception as e:
+            logger.error("Error in remove_case for case_id: %s - %s", case_id, str(e), exc_info=True)
+            return False
