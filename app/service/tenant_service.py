@@ -1,6 +1,8 @@
+import logging
 from app.service.supabase_service import SupabaseService
 from typing import Dict, Any, List
 
+logger = logging.getLogger(__name__)
 
 class TenantService():
     def __init__(self):
@@ -17,12 +19,14 @@ class TenantService():
             )
 
             if not insert_res: 
+                logger.warning("Failed to insert tenant with name: %s", name)
                 return False
 
+            logger.info("Successfully created tenant with name: %s", name)
             return True
 
         except Exception as e:
-            print("Tenant Service Error - insert_new_tenant: ", e)
+            logger.error("Tenant Service Error - insert_new_tenant for name: %s - %s", name, str(e), exc_info=True)
             return False
         
     async def get_all_tenants(self) -> List[Dict[str, Any]]:
@@ -33,12 +37,14 @@ class TenantService():
             )
 
             if not res:
+                logger.info("No tenants found")
                 return []
 
+            logger.info("Retrieved %d tenants", len(res))
             return res
 
         except Exception as e:
-            print("Tenant Service Error - get_all_tenants: ", e)
+            logger.error("Tenant Service Error - get_all_tenants - %s", str(e), exc_info=True)
             return []
         
     
@@ -51,11 +57,12 @@ class TenantService():
             )
 
             if not res:
+                logger.warning("Tenant not found with id: %s", id)
                 return {}
 
+            logger.info("Successfully retrieved tenant with id: %s", id)
             return res
 
         except Exception as e:
-            print("Tenant Service Error - get_tenant: ", e)
+            logger.error("Tenant Service Error - get_tenant for id: %s - %s", id, str(e), exc_info=True)
             return {}
-        
