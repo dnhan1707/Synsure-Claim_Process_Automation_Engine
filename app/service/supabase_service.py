@@ -164,6 +164,23 @@ class SupabaseService():
         except Exception as e:
             print("Supabase Service Error - get_all", e)
             return None
+        
+    async def get_all_claim_by_tenant_id(self, table_name: str, tenant_id: str, columns: str):
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(columns)
+                .eq("tenant_id", tenant_id)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data
+
+            return None
+
+        except Exception as e:
+            print("Supabase Service Error - get_all", e)
+            return None
     
     async def get_row_by_id(self, id: str, table_name: str, columns: str):
         try:

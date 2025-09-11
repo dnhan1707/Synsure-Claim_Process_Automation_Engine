@@ -3,6 +3,9 @@ from typing import List, Optional, Dict, Any
 from app.service.supabase_service import SupabaseService
 from app.service.s3_service import FileService
 from app.service.case_service import CaseService
+import logging
+
+logger = logging.getLogger(__name__)
 
 # This controller include the logic of the route
 class CaseControllerV2():
@@ -11,13 +14,6 @@ class CaseControllerV2():
         self.case_service = CaseService()
         self.file_service =  FileService()
 
-    async def get_cases(self) -> List[Dict[str, Any]]:
-        # return List[{id:..., case_name:...}]
-        try:
-            case_list = await self.sp_service.get_all_name_id(table_name="case")
-            return case_list
-        except Exception as e:
-            return []
 
     async def get_latest_response(self, case_id: str) -> Dict[str, Any]:
         try:
@@ -32,52 +28,6 @@ class CaseControllerV2():
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def create_case(
-            self, 
-            case_id: Optional[str], 
-            case_name: str, 
-            manual_inputs: Optional[str], 
-            files: Optional[List[UploadFile]]
-        ) -> Dict[str, Any]:
-        try:
-            # If no case_id, create a new case
-            if not case_id:
-                case_row = await self.sp_service.insert(table_name="case", object={"case_name": case_name})
-                case_id = case_row["id"] if case_row and "id" in case_row else None
-                if not case_id:
-                    return {"success": False, "error": "Failed to create case."}
-
-            await self.case_service.save_manual_and_files(case_id=case_id, case_name=case_name, manual_inputs=manual_inputs, files=files, response_data_id=None)
-
-            return {"success": True, "case_id": case_id}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    async def update_case(self, case_id: str, new_case_name: str) -> Dict[str, Any]:
-        try:
-            case_row = await self.sp_service.update(table_name="case", id=case_id, objects={"case_name": new_case_name})
-            case_id = case_row["id"] if case_row and "id" in case_row else None
-            if not case_id:
-                return {"success": False, "error": "Failed to update case."}
-            return {"success": True, "case_id": case_id, "case_name": new_case_name}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    async def delete(self, case_ids: List[str]) -> Dict[str, Any]:
-        # update the is_active column to be False for all provided case_ids
-        try:
-            results = []
-            for case_id in case_ids:
-                case_row = await self.sp_service.update(table_name="case", id=case_id, objects={"is_active": False})
-                case_id_returned = case_row["id"] if case_row and "id" in case_row else None
-                if not case_id_returned:
-                    results.append({"case_id": case_id, "success": False, "error": "Failed to update case."})
-                else:
-                    results.append({"case_id": case_id_returned, "success": True, "is_active": False})
-            return {"results": results}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-        
 
     async def submit_one_case(
         self,
@@ -138,3 +88,117 @@ class CaseControllerV2():
         
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+
+class CaseControllerV3():
+    def __init__(self):
+        self.sp_service = SupabaseService()
+        self.case_service = CaseService()
+
+    async def get_all_cases(self, tenant_id: str) -> List[Dict[str, Any]]:
+        try:
+            res = await self.sp_service.get_all_claim_by_tenant_id(
+                table_name="cases",
+                tenant_id=tenant_id,
+                columns="id, case_name, status"
+            )
+            if not res:
+                logger.warning("Empty or crash in CaseControllerV3 get_all_cases")
+                return []
+            
+            return res
+
+        except Exception as e:
+            logger.error("Error in CaseControllerV3 get_all_cases")
+            return []
+
+
+    async def get_case(self, tenant_id: str, case_id: str) -> Dict[str, Any]:
+        try:
+            res = await self.case_service.get_case(tenant_id, case_id)
+            if not res:
+                logger.error("Error in get_claim_by_id, either None or crash")
+                return {}
+
+            return res
+
+        except Exception as e:
+            return {}
+
+
+    async def create_new_case(
+            self,
+            tenant_id: str, 
+            case_name: str,  
+            files: Optional[List[UploadFile]]
+        ) -> bool:
+        try:
+            res = await self.case_service.create_new_case(tenant_id, case_name, files)
+            return res
+        except Exception as e:
+            return False
+    
+
+    async def upload_files_existed_case(
+            self,
+            tenant_id: str, 
+            case_name: str,  
+            files: List[UploadFile]
+        ) -> bool:
+        try:
+            res = await self.case_service.upload_files_existed_case(tenant_id, case_name, files)
+            return res
+        except Exception as e:
+            return False
+        
+
+    async def update_claim_name(self, case_id: str, new_name: str) -> bool:
+        try:
+            res = await self.case_service.update_claim_name(case_id, new_name)
+
+            if not res:
+                return False
+            
+            return True
+        
+        except Exception as e:
+            logger.error("Error in update_claim_name: ", str(e), exc_info=True)
+            return False
+
+    async def remove_files(self, file_ids: List[str]) -> bool:
+        """
+        Remove multiple files by their IDs
+        """
+        try:
+            logger.info("Controller: Removing %d files", len(file_ids))
+            
+            res = await self.case_service.remove_files(file_ids)
+            if not res:
+                logger.warning("Failed to remove files: %s", file_ids)
+                return False
+            
+            logger.info("Successfully removed files: %s", file_ids)
+            return True
+            
+        except Exception as e:
+            logger.error("Error in remove_files for file_ids: %s - %s", file_ids, str(e), exc_info=True)
+            return False
+
+    async def remove_case(self, case_id: str) -> bool:
+        """
+        Remove a case and all its associated files
+        """
+        try:
+            logger.info("Controller: Removing case %s", case_id)
+            
+            res = await self.case_service.remove_case(case_id)
+            if not res:
+                logger.warning("Failed to remove case: %s", case_id)
+                return False
+            
+            logger.info("Successfully removed case: %s", case_id)
+            return True
+            
+        except Exception as e:
+            logger.error("Error in remove_case for case_id: %s - %s", case_id, str(e), exc_info=True)
+            return False
