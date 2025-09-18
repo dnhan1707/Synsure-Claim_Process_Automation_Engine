@@ -159,8 +159,8 @@ async def test_files_table_operations(real_supabase_service: SupabaseService, te
     
     # Test get_files_by_case_id
     files = await real_supabase_service.get_files_by_case_id(case_id)
-    print(f"Files found for case {case_id}: {len(files)}")
-    print(f"Files data: {files}")
+    # print(f"Files found for case {case_id}: {len(files)}")
+    # print(f"Files data: {files}")
     
     assert len(files) == 2
     assert all("s3_link" in file for file in files)

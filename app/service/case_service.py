@@ -8,7 +8,8 @@ from fastapi import UploadFile
 import logging
 import uuid
 import boto3
-
+import io
+from PyPDF2 import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +145,8 @@ class CaseService:
         file_contents: Optional[List[Dict[str, Any]]] = None
     ) -> None:
         try:
-            logger.info("Starting save_manual_and_files: case_id=%s, files_count=%d, file_contents_count=%d", 
-                    case_id, len(files) if files else 0, len(file_contents) if file_contents else 0)
+            # logger.info("Starting save_manual_and_files: case_id=%s, files_count=%d, file_contents_count=%d", 
+                    # case_id, len(files) if files else 0, len(file_contents) if file_contents else 0)
             
             files_to_insert = []
 
@@ -165,20 +166,34 @@ class CaseService:
                 logger.info("Processed %d UploadFile objects", len(uploaded_files))
 
             # Bulk insert new files
-            if files_to_insert:
+            if files_to_insert and response_data_id:
                 logger.info("Bulk inserting %d files to database...", len(files_to_insert))
                 logger.debug("Files to insert: %s", files_to_insert)  # Debug the actual data
                 
-                result = await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
-                logger.info("Bulk insert completed: %s", result)
+                inserted_files = await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
+                logger.info("Bulk insert completed: %s", inserted_files)
                 
                 # Check if insert was successful
-                if not result:
+                if not inserted_files:
                     logger.error("Bulk insert returned False/None")
-                elif isinstance(result, dict) and "error" in result:
-                    logger.error("Bulk insert failed: %s", result)
+                elif isinstance(inserted_files, dict) and "error" in inserted_files:
+                    logger.error("Bulk insert failed: %s", inserted_files)
+
+                # Conduct the response_input_files relationship
+                if isinstance(inserted_files, list):
+                    await self._create_response_file_relationships(response_data_id, inserted_files)
+                else:
+                    logger.warning("Unexpected insert_bulk return type: %s", type(inserted_files))
+                
+
+            elif files_to_insert and not response_data_id:
+                logger.warning("Files to insert but no response_data_id provided")
+                # Still insert files without relationship
+                inserted_files = await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
+                logger.info("Files inserted without response relationship")
             else:
                 logger.warning("No files to insert")
+            
                 
         except Exception as e:
             logger.error("Error in save_manual_and_files for case_id %s: %s", case_id, str(e), exc_info=True)
@@ -186,7 +201,7 @@ class CaseService:
 
     async def proceed_with_model(self, tenant_id: str, case_id: str, case_name: str, files: Optional[List[UploadFile]]):
         try:
-            logger.info("Starting proceed_with_model: case_id=%s, files_count=%d", case_id, len(files) if files else 0)
+            # logger.info("Starting proceed_with_model: case_id=%s, files_count=%d", case_id, len(files) if files else 0)
             
             # Read file contents for model processing
             file_contents = await self._read_uploaded_files(files) if files else []
@@ -197,22 +212,27 @@ class CaseService:
             response = await self.model_service.generate_response_v2(file_contents, None)
             logger.info("Model response generated successfully")
             
-            # Save model response and get response ID
+            # Save model response FIRST and get response ID
             logger.info("Saving model response...")
             response_data_id = await self._save_model_response(tenant_id, response, case_id)
+            
+            if not response_data_id:
+                logger.error("Failed to save model response, cannot proceed with file relationships")
+                return response
+                
             logger.info("Model response saved with ID: %s", response_data_id)
             
-            # Save files to S3 and database using file_contents (not the consumed UploadFile objects)
-            logger.info("Saving files and manual data...")
+            # Save files to S3 and database with response relationship
+            logger.info("Saving files and creating relationships...")
             await self.save_manual_and_files(
                 tenant_id=tenant_id,
                 case_id=case_id, 
                 case_name=case_name,
                 files=None,  # Don't pass consumed files
-                response_data_id=response_data_id, 
+                response_data_id=response_data_id,  # Pass the response ID
                 file_contents=file_contents  # Use the file contents we read
             )
-            logger.info("Files and manual data saved successfully")
+            logger.info("Files and relationships saved successfully")
             
             return response
             
@@ -220,7 +240,7 @@ class CaseService:
             logger.error("Error in proceed_with_model for case_id %s: %s", case_id, str(e), exc_info=True)
             raise
 
-    async def proceed_with_model_history_files(self, case_id: str):
+    async def proceed_with_model_history_files(self, tenant_id: str, case_id: str):
         """
         Generate model response using previously uploaded files for a case.
         Uses cached PDF text and aggregates with manual input.
@@ -228,6 +248,19 @@ class CaseService:
         # Get file metadata from Supabase
         files_metadata = await self.sp_service.get_files_by_case_id(case_id)
         
+        if not files_metadata:
+            logger.warning("No files found for case_id: %s", case_id)
+            return {
+                "decision": "REVIEW_REQUIRED",
+                "reasoning": "No files found for this case. Please upload documents to proceed with analysis.",
+                "confidence": 0,
+                "riskScore": "HIGH",
+                "flags": ["NO_FILES_FOUND"]
+            }
+        
+        print("Found %d existing files for case %s", len(files_metadata), case_id)
+        
+
         # Aggregate content from existing files
         manual_input, aggregated_details = await self._aggregate_file_contents_from_metadata(files_metadata)
         
@@ -239,7 +272,7 @@ class CaseService:
         )
         
         # Save the response
-        response_data_id = await self._save_model_response(response, case_id)
+        response_data_id = await self._save_model_response(tenant_id, response, case_id)
         
         # Link existing files to this new response
         if response_data_id:
@@ -358,7 +391,7 @@ class CaseService:
 
     async def upload_files_existed_case(self, tenant_id: str, case_id: str, files: List[UploadFile]) -> bool:
         try:
-            logger.info("Starting file upload for case_id: %s with %d files", case_id, len(files))
+            # logger.info("Starting file upload for case_id: %s with %d files", case_id, len(files))
         
             logger.info("Found case for tenant_id: %s", tenant_id)
             
@@ -583,6 +616,47 @@ class CaseService:
 
 # -------------------------------------------------------------Helper Function------------------------------------------------------------------
 
+    async def _create_response_file_relationships(self, response_id: str, inserted_files: List[dict]) -> None:
+        """
+        Create relationships between response and files in the response_input_files table.
+        """
+        try:
+            logger.info("Creating response-file relationships for response %s with %d files", 
+                    response_id, len(inserted_files))
+            
+            # Prepare relationship records
+            relationship_records = []
+            for file_record in inserted_files:
+                file_id = file_record.get("id")
+                if file_id:
+                    relationship_records.append({
+                        "response_id": response_id,
+                        "file_id": file_id
+                    })
+                else:
+                    logger.warning("File record missing ID: %s", file_record)
+            
+            if relationship_records:
+                logger.info("Inserting %d response-file relationships", len(relationship_records))
+                logger.debug("Relationships to insert: %s", relationship_records)
+                
+                # Bulk insert the relationships
+                result = await self.sp_service.insert_bulk(
+                    table_name="response_input_files", 
+                    objects=relationship_records
+                )
+                
+                if result:
+                    logger.info("Successfully created %d response-file relationships", len(relationship_records))
+                else:
+                    logger.error("Failed to create response-file relationships")
+            else:
+                logger.warning("No valid relationship records to insert")
+                
+        except Exception as e:
+            logger.error("Error creating response-file relationships: %s", str(e), exc_info=True)
+
+
     async def _read_uploaded_files(self, files: List[UploadFile]) -> List[Dict[str, Any]]:
         """Extract this for easier testing"""
         file_contents = []
@@ -647,54 +721,118 @@ class CaseService:
 
     async def _aggregate_file_contents_from_metadata(self, files_metadata: List[Dict]) -> tuple[str, str]:
         """
-        Extract and aggregate content from files based on metadata.
-        Returns: (manual_input, aggregated_pdf_text)
+        Aggregate manual input and file details from existing files metadata.
+        Returns (manual_input, aggregated_details)
         """
-        details_parts = []
-        manual_input = ""
-
-        for file in files_metadata:
-            s3_link = file.get("s3_link", "")
-            filename = s3_link.split("/")[-1].lower()
-
-            if filename.endswith(".pdf"):
-                # Use Redis-cached extraction by S3 key
-                text = await self.file_service.extract_pdf_text_cached_from_s3(s3_link)
-                if text:
-                    details_parts.append(text)
-
-            elif filename.endswith(".txt"):
-                # Load manual input text
-                manual_input = await self._load_text_from_s3(s3_link)
-
-        aggregated_details = "".join(details_parts)
-        return manual_input, aggregated_details
+        try:
+            logger.info("Aggregating content from %d files", len(files_metadata))
+            
+            manual_input = ""
+            aggregated_details = ""
+            
+            for file_metadata in files_metadata:
+                logger.info("Processing file: %s", file_metadata)
+                
+                s3_key = file_metadata.get("s3_key")
+                file_name = file_metadata.get("name", "unknown")
+                file_kind = file_metadata.get("kind", "unknown")
+                
+                if not s3_key:
+                    logger.warning("No S3 key found for file: %s", file_metadata)
+                    continue
+                
+                logger.info("Loading content from S3 key: %s", s3_key)
+                
+                # Load text content from S3
+                if file_kind == "manual_input":
+                    # This is a manual input text file
+                    text_content = await self._load_text_from_s3(s3_key)
+                    manual_input += f"\n{text_content}"
+                    logger.info("Added manual input content, length: %d", len(text_content))
+                elif file_kind == "raw_upload":
+                    # This is an uploaded file - we need to extract/parse it
+                    # Check if there's already processed text for this file
+                    processed_text = await self._get_processed_text_for_file(file_metadata["id"])
+                    
+                    if processed_text:
+                        aggregated_details += f"\n--- Content from {file_name} ---\n{processed_text}\n"
+                        logger.info("Added processed text for %s, length: %d", file_name, len(processed_text))
+                    else:
+                        # If no processed text, try to extract it now
+                        logger.info("No processed text found, attempting to extract from %s", file_name)
+                        try:
+                            # Download and extract text from the file
+                            file_content = await self._download_file_from_s3(s3_key)
+                            if file_content:
+                                # Use your existing text extraction logic
+                                extracted_text = await self._extract_text_from_file_content(file_name, file_content)
+                                if extracted_text:
+                                    aggregated_details += f"\n--- Content from {file_name} ---\n{extracted_text}\n"
+                                    logger.info("Extracted and added text for %s, length: %d", file_name, len(extracted_text))
+                        except Exception as extract_error:
+                            logger.error("Failed to extract text from %s: %s", file_name, str(extract_error))
+            
+            logger.info("Aggregation complete - manual_input: %d chars, aggregated_details: %d chars", 
+                    len(manual_input), len(aggregated_details))
+            
+            return manual_input.strip(), aggregated_details.strip()
+            
+        except Exception as e:
+            logger.error("Error aggregating file contents: %s", str(e), exc_info=True)
+            return "", ""
 
 
     async def _load_text_from_s3(self, s3_key: str) -> str:
         """Load text content from S3 key."""
         try:
-            s3_obj = self.file_service.s3_client.get_object(
-                Bucket=self.file_service.aws_bucket_name,
+            logger.info("Loading text from S3 key: %s", s3_key)
+            
+            s3_obj = self.s3_client.get_object(
+                Bucket=self.aws_bucket_name,
                 Key=s3_key
             )
-            return s3_obj["Body"].read().decode("utf-8")
-        except Exception:
+            content = s3_obj["Body"].read().decode("utf-8")
+            logger.info("Successfully loaded text from S3, length: %d", len(content))
+            return content
+            
+        except Exception as e:
+            logger.error("Error loading text from S3 key %s: %s", s3_key, str(e), exc_info=True)
             return ""
 
-
     async def _link_existing_files_to_response(self, files_metadata: List[Dict], case_id: str, response_data_id: str) -> None:
-        """Link existing files to a new response by updating their response_id."""
-        for file_metadata in files_metadata:
-            file_id = file_metadata.get("id")
-            if file_id:
-                # Update existing file record to link to new response
-                await self.sp_service.update(
-                    table_name="files",
-                    id=file_id,
-                    objects={"response_id": response_data_id}
+        """Link existing files to a new response using the response_input_files junction table."""
+        try:
+            logger.info("Linking %d existing files to response %s", len(files_metadata), response_data_id)
+            
+            relationship_records = []
+            for file_metadata in files_metadata:
+                file_id = file_metadata.get("id")
+                if file_id:
+                    relationship_records.append({
+                        "response_id": response_data_id,
+                        "file_id": file_id
+                    })
+                else:
+                    logger.warning("File metadata missing ID: %s", file_metadata)
+            
+            if relationship_records:
+                logger.info("Creating %d file-response relationships", len(relationship_records))
+                
+                # Use the junction table instead of updating files directly
+                result = await self.sp_service.insert_bulk(
+                    table_name="response_input_files",
+                    objects=relationship_records
                 )
-
+                
+                if result:
+                    logger.info("Successfully linked %d files to response %s", len(relationship_records), response_data_id)
+                else:
+                    logger.error("Failed to link files to response")
+            else:
+                logger.warning("No valid files to link to response")
+                
+        except Exception as e:
+            logger.error("Error linking files to response %s: %s", response_data_id, str(e), exc_info=True)
 
     def _resolve_filename_conflict(self, original_filename: str, existing_names: List[str]) -> str:
             """
@@ -728,3 +866,99 @@ class CaseService:
                     # Fallback to UUID suffix
                     unique_suffix = str(uuid.uuid4())[:8]
                     return f"{name_part}_{unique_suffix}{extension}"
+                
+
+    async def _download_file_from_s3(self, s3_key: str) -> Optional[bytes]:
+        """Download file content from S3."""
+        try:
+            logger.info("Downloading file from S3: %s", s3_key)
+            
+            response = self.s3_client.get_object(
+                Bucket=self.aws_bucket_name,
+                Key=s3_key
+            )
+            content = response["Body"].read()
+            logger.info("Downloaded file, size: %d bytes", len(content))
+            return content
+            
+        except Exception as e:
+            logger.error("Error downloading file from S3 %s: %s", s3_key, str(e))
+            return None
+
+    async def _get_processed_text_for_file(self, file_id: str) -> Optional[str]:
+        """Check if there's already processed text for this file."""
+        try:
+            # Check if you store processed text somewhere (maybe in another table?)
+            # For now, return None to force re-extraction
+            return None
+            
+        except Exception as e:
+            logger.error("Error getting processed text for file %s: %s", file_id, str(e))
+            return None
+
+    async def _extract_text_from_file_content(self, filename: str, content: bytes) -> Optional[str]:
+        """Extract text from file content based on file type."""
+        try:
+            logger.info("Extracting text from file: %s, size: %d bytes", filename, len(content))
+            
+            filename_lower = filename.lower()
+            
+            if filename_lower.endswith('.pdf'):
+                # Use your existing PDF extraction logic
+                try:
+                    
+                    pdf_file = io.BytesIO(content)
+                    reader = PdfReader(pdf_file)
+                    
+                    text = ""
+                    for page in reader.pages:
+                        text += page.extract_text() + "\n"
+                    
+                    logger.info("Extracted %d characters from PDF: %s", len(text), filename)
+                    return text.strip()
+                    
+                except Exception as pdf_error:
+                    logger.error("Failed to extract PDF text from %s: %s", filename, str(pdf_error))
+                    return None
+                    
+            elif filename_lower.endswith(('.txt', '.md', '.csv')):
+                try:
+                    text = content.decode('utf-8')
+                    logger.info("Extracted %d characters from text file: %s", len(text), filename)
+                    return text
+                except UnicodeDecodeError:
+                    try:
+                        text = content.decode('latin-1')
+                        logger.info("Extracted %d characters from text file (latin-1): %s", len(text), filename)
+                        return text
+                    except Exception as decode_error:
+                        logger.error("Failed to decode text file %s: %s", filename, str(decode_error))
+                        return None
+                        
+            elif filename_lower.endswith(('.doc', '.docx')):
+                # Use python-docx for Word documents
+                try:
+                    from docx import Document
+                    import io
+                    
+                    doc_file = io.BytesIO(content)
+                    doc = Document(doc_file)
+                    
+                    text = ""
+                    for paragraph in doc.paragraphs:
+                        text += paragraph.text + "\n"
+                    
+                    logger.info("Extracted %d characters from Word document: %s", len(text), filename)
+                    return text.strip()
+                    
+                except Exception as doc_error:
+                    logger.error("Failed to extract Word document text from %s: %s", filename, str(doc_error))
+                    return None
+                    
+            else:
+                logger.warning("Unsupported file type for text extraction: %s", filename)
+                return f"[File: {filename} - Content extraction not supported for this file type]"
+                
+        except Exception as e:
+            logger.error("Error extracting text from %s: %s", filename, str(e), exc_info=True)
+            return None

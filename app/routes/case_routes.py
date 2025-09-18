@@ -101,7 +101,7 @@ def create_case_route() -> APIRouter:
     async def submit_one_case(
         tenant_id: str,
         case_name: str,
-        files: List[UploadFile],
+        files: List[UploadFile] = None,
         case_id: Optional[str] = None
     ):
         try:

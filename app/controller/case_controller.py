@@ -213,8 +213,8 @@ class CaseControllerV3():
         status: CaseStatus = CaseStatus.processing
     ) -> Dict[str, Any]:
         try:
-            logger.info("Starting submit_one_case: tenant_id=%s, case_id=%s, case_name=%s, files_count=%d", 
-                    tenant_id, case_id, case_name, len(files))
+            # logger.info("Starting submit_one_case: tenant_id=%s, case_id=%s, case_name=%s, files_count=%d", 
+            #         tenant_id, case_id, case_name, len(files))
             
             if not case_id or case_id == "":
                 logger.info("Creating new case for tenant_id: %s, case_name: %s", tenant_id, case_name)
@@ -249,6 +249,21 @@ class CaseControllerV3():
             else:
                 logger.info("Using existing case: %s", case_id)
                 
+                # Verify the case exists and belongs to tenant
+                case_info = await self.sp_service.get_row_by_id(
+                    id=case_id,
+                    table_name="cases",
+                    columns="id, tenant_id, case_name"
+                )
+                
+                if not case_info:
+                    logger.error("Case %s not found", case_id)
+                    return {"success": False, "error": "Case not found"}, case_id
+                
+                if case_info["tenant_id"] != tenant_id:
+                    logger.error("Case %s does not belong to tenant %s", case_id, tenant_id)
+                    return {"success": False, "error": "Unauthorized"}, case_id
+                
                 if files:
                     logger.info("Processing %d new files for existing case: %s", len(files), case_id)
                     try:
@@ -261,13 +276,13 @@ class CaseControllerV3():
                 else:
                     logger.info("No new files, using history files for case: %s", case_id)
                     try:
-                        result = await self.case_service.proceed_with_model_history_files(case_id)
+                        result = await self.case_service.proceed_with_model_history_files(tenant_id, case_id)
                         logger.info("proceed_with_model_history_files completed for case: %s", case_id)
                         return result, case_id
                     except Exception as model_error:
                         logger.error("Error in proceed_with_model_history_files for case %s: %s", case_id, str(model_error), exc_info=True)
                         return {"success": False, "error": f"History processing failed: {str(model_error)}"}, case_id
-
+        
         except Exception as e:
             logger.error("Error in submit_one_case: tenant_id=%s, case_id=%s - %s", tenant_id, case_id, str(e), exc_info=True)
             return {"success": False, "error": f"Submit case failed: {str(e)}"}, case_id
