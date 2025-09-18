@@ -13,11 +13,13 @@ class ModelService():
         self.validator = Validator()
 
 
-    async def generate_response_v2(self, file_contents: list, manual_input: str):
+    async def generate_response_v2(self, file_contents: list, manual_input: str = None):
         try:
             file_service = FileService()
             details = await file_service.extract_text(file_contents)
-            details += manual_input
+            if manual_input:
+                details += manual_input
+                
             base_prompt = get_prompt(details)
             prompt = base_prompt
             MAX_RETRIES = 2

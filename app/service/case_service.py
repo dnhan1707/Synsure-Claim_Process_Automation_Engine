@@ -55,10 +55,11 @@ class CaseService:
         self,
         files: List[UploadFile],
         case_id: str,
+        tenant_id: str,
         case_name: str,
         response_data_id: Optional[str]
     ) -> List[dict]:
-        result = await self.file_service.save_files(files=files, case_id=case_id)
+        result = await self.file_service.save_files(tenant_id=tenant_id, files=files, case_id=case_id)
         
         # Add proper null/error checking
         if not isinstance(result, dict) or "s3_keys" not in result:
@@ -72,8 +73,12 @@ class CaseService:
         for s3_key in s3_keys:
             files_metadata.append({
                 "case_id": case_id,
-                "case_name": case_name,
-                "s3_link": s3_key,
+                "kind": "raw_upload",
+                "tenant_id": tenant_id,
+                # "case_name": case_name,
+                "s3_bucket": self.aws_bucket_name,
+                "s3_link": s3_key[0],
+                "name": s3_key[1],
                 "response_id": response_data_id
             })
         
@@ -83,75 +88,137 @@ class CaseService:
     async def save_uploaded_files_from_contents(
         self,
         file_contents: List[Dict[str, Any]],
+        tenant_id: str,
         case_id: str,
         case_name: str,
         response_data_id: Optional[str],
     ) -> List[dict]:
-        result = await self.file_service.save_files_from_bytes(items=file_contents, case_id=case_id)
-        
-        # Add proper null/error checking
-        if not isinstance(result, dict) or "s3_keys" not in result:
+        try:
+            logger.info("Saving %d files from contents for case %s", len(file_contents), case_id)
+            
+            result = await self.file_service.save_files_from_bytes(
+                tenant_id=tenant_id, 
+                items=file_contents, 
+                case_id=case_id
+            )
+            
+            # Add proper null/error checking
+            if not isinstance(result, dict) or "s3_keys" not in result:
+                logger.error("Failed to save files to S3: %s", result)
+                return []
+            
+            s3_keys = result.get("s3_keys")
+            if not s3_keys:  
+                logger.warning("No S3 keys returned from file service")
+                return []
+            
+            files_metadata = []
+            for s3_key, filename in s3_keys:  # Note: s3_key is a tuple (s3_key, filename)
+                files_metadata.append({
+                    "id": str(uuid.uuid4()),  # Generate unique ID
+                    "case_id": case_id,
+                    "tenant_id": tenant_id,
+                    "kind": "raw_upload",
+                    "name": filename,  # Use the filename from tuple
+                    "s3_bucket": self.aws_bucket_name,
+                    "s3_key": s3_key,  # Use s3_key from tuple
+                    "uploaded_at": "now()",  # Or use proper timestamp
+                    # Don't include response_id for uploaded files
+                })
+                
+            logger.info("Prepared %d file metadata records", len(files_metadata))
+            return files_metadata
+            
+        except Exception as e:
+            logger.error("Error in save_uploaded_files_from_contents: %s", str(e), exc_info=True)
             return []
-        
-        s3_keys = result.get("s3_keys")
-        if not s3_keys:  
-            return []
-        
-        files_metadata = []
-        for s3_key in s3_keys:
-            files_metadata.append({
-                "case_id": case_id,
-                "case_name": case_name,
-                "s3_link": s3_key,
-                "response_id": response_data_id
-            })
-        
-        return files_metadata
 
 
     async def save_manual_and_files(
         self,
+        tenant_id: str,
         case_id: str,
         case_name: str,
-        manual_inputs: str,
         files: Optional[List[UploadFile]],
         response_data_id: Optional[str],
         file_contents: Optional[List[Dict[str, Any]]] = None
     ) -> None:
-        
-        files_to_insert = []
+        try:
+            logger.info("Starting save_manual_and_files: case_id=%s, files_count=%d, file_contents_count=%d", 
+                    case_id, len(files) if files else 0, len(file_contents) if file_contents else 0)
+            
+            files_to_insert = []
 
-        # Save manual input if provided
-        if manual_inputs:
-            text_file = await self.save_manual_input(manual_inputs, case_id, case_name, response_data_id)
-            if text_file:
-                files_to_insert.append(text_file)
+            # Save files using bytes if provided; else fall back to UploadFile flow
+            if file_contents:
+                logger.info("Processing file contents...")
+                uploaded_files = await self.save_uploaded_files_from_contents(
+                    file_contents, tenant_id, case_id, case_name, response_data_id
+                )
+                files_to_insert.extend(uploaded_files)
+                logger.info("Processed %d file contents, got %d metadata records", 
+                        len(file_contents), len(uploaded_files))
+            elif files:
+                logger.info("Processing UploadFile objects...")
+                uploaded_files = await self.save_uploaded_files(files, case_id, tenant_id, case_name, response_data_id)
+                files_to_insert.extend(uploaded_files)
+                logger.info("Processed %d UploadFile objects", len(uploaded_files))
 
-        # Save files using bytes if provided; else fall back to UploadFile flow
-        if file_contents:
-            uploaded_files = await self.save_uploaded_files_from_contents(file_contents, case_id, case_name, response_data_id)
-            files_to_insert.extend(uploaded_files)
-        elif files:
-            uploaded_files = await self.save_uploaded_files(files, case_id, case_name, response_data_id)
-            files_to_insert.extend(uploaded_files)
+            # Bulk insert new files
+            if files_to_insert:
+                logger.info("Bulk inserting %d files to database...", len(files_to_insert))
+                logger.debug("Files to insert: %s", files_to_insert)  # Debug the actual data
+                
+                result = await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
+                logger.info("Bulk insert completed: %s", result)
+                
+                # Check if insert was successful
+                if not result:
+                    logger.error("Bulk insert returned False/None")
+                elif isinstance(result, dict) and "error" in result:
+                    logger.error("Bulk insert failed: %s", result)
+            else:
+                logger.warning("No files to insert")
+                
+        except Exception as e:
+            logger.error("Error in save_manual_and_files for case_id %s: %s", case_id, str(e), exc_info=True)
+            raise
 
-        # Bulk insert new files
-        if files_to_insert:
-            await self.sp_service.insert_bulk(table_name="files", objects=files_to_insert)
-    
-
-    async def proceed_with_model(self, case_id: str, case_name: str, manual_input: str, files: Optional[List[UploadFile]]):
-        # Now much simpler and testable
-        file_contents = await self._read_uploaded_files(files) if files else []
-        response = await self.model_service.generate_response_v2(file_contents, manual_input or "")
-        response_data_id = await self._save_model_response(response, case_id)
-        
-        await self.save_manual_and_files(
-            case_id=case_id, case_name=case_name, manual_inputs=manual_input,
-            files=None, response_data_id=response_data_id, file_contents=file_contents
-        )
-        return response
-    
+    async def proceed_with_model(self, tenant_id: str, case_id: str, case_name: str, files: Optional[List[UploadFile]]):
+        try:
+            logger.info("Starting proceed_with_model: case_id=%s, files_count=%d", case_id, len(files) if files else 0)
+            
+            # Read file contents for model processing
+            file_contents = await self._read_uploaded_files(files) if files else []
+            logger.info("Read %d file contents for model processing", len(file_contents))
+            
+            # Generate model response
+            logger.info("Generating model response...")
+            response = await self.model_service.generate_response_v2(file_contents, None)
+            logger.info("Model response generated successfully")
+            
+            # Save model response and get response ID
+            logger.info("Saving model response...")
+            response_data_id = await self._save_model_response(tenant_id, response, case_id)
+            logger.info("Model response saved with ID: %s", response_data_id)
+            
+            # Save files to S3 and database using file_contents (not the consumed UploadFile objects)
+            logger.info("Saving files and manual data...")
+            await self.save_manual_and_files(
+                tenant_id=tenant_id,
+                case_id=case_id, 
+                case_name=case_name,
+                files=None,  # Don't pass consumed files
+                response_data_id=response_data_id, 
+                file_contents=file_contents  # Use the file contents we read
+            )
+            logger.info("Files and manual data saved successfully")
+            
+            return response
+            
+        except Exception as e:
+            logger.error("Error in proceed_with_model for case_id %s: %s", case_id, str(e), exc_info=True)
+            raise
 
     async def proceed_with_model_history_files(self, case_id: str):
         """
@@ -525,17 +592,58 @@ class CaseService:
         return file_contents
         
 
-    async def _save_model_response(self, response: dict, case_id: str) -> Optional[str]:
-        """Extract this for easier testing"""
-        response_saved_res = await self.file_service.save_respose_v2(response=response, case_id=case_id)
-        response_s3_key = response_saved_res.get("s3_key") if isinstance(response_saved_res, dict) else None
-        
-        response_row = await self.sp_service.insert(
-            table_name="response",
-            object={"case_id": case_id, "s3_link": response_s3_key}
-        )
-        return response_row.get("id") if response_row else None
-
+    async def _save_model_response(self, tenant_id: str, response: dict, case_id: str) -> Optional[str]:
+        """Save model response to S3 and database"""
+        try:
+            logger.info("Saving model response for case %s", case_id)
+            
+            # Save response to S3
+            response_saved_res = await self.file_service.save_respose_v2(
+                tenant_id=tenant_id, 
+                response=response, 
+                case_id=case_id
+            )
+            
+            if not isinstance(response_saved_res, dict) or "s3_key" not in response_saved_res:
+                logger.error("Failed to save response to S3: %s", response_saved_res)
+                return None
+                
+            response_s3_key = response_saved_res.get("s3_key")
+            logger.info("Response saved to S3: %s", response_s3_key)
+            
+            # Prepare data for responses table - match your schema exactly
+            response_data = {
+                "tenant_id": tenant_id,
+                "case_id": case_id,
+                "s3_key": response_s3_key,
+                "status": "succeeded",  # Required field, change from default "running"
+                # Don't include started_at, completed_at, or created_at - let defaults handle them
+                # Or explicitly set completed_at since status is "succeeded"
+                "completed_at": "now()"
+            }
+            
+            logger.info("Inserting response data: %s", response_data)
+            
+            # Save to responses table
+            response_row = await self.sp_service.insert(
+                table_name="responses",
+                object=response_data
+            )
+            
+            logger.info("Insert result: %s", response_row)
+            
+            if not response_row or "id" not in response_row:
+                logger.error("Failed to save response to database. Insert returned: %s", response_row)
+                return None
+                
+            response_id = response_row.get("id")
+            logger.info("Response saved to database with ID: %s", response_id)
+            return response_id
+            
+        except Exception as e:
+            logger.error("Error in _save_model_response: %s", str(e), exc_info=True)
+            return None
+    
 
     async def _aggregate_file_contents_from_metadata(self, files_metadata: List[Dict]) -> tuple[str, str]:
         """

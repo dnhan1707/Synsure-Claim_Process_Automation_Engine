@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from app.service.supabase_service import SupabaseService
 from app.service.s3_service import FileService
 from app.service.case_service import CaseService
+from app.schema.schema import CaseStatus
 import logging
 
 logger = logging.getLogger(__name__)
@@ -202,3 +203,71 @@ class CaseControllerV3():
         except Exception as e:
             logger.error("Error in remove_case for case_id: %s - %s", case_id, str(e), exc_info=True)
             return False
+
+
+    async def submit_one_case(self, 
+        tenant_id: str,
+        case_id: Optional[str],
+        case_name: str,
+        files: List[UploadFile],
+        status: CaseStatus = CaseStatus.processing
+    ) -> Dict[str, Any]:
+        try:
+            logger.info("Starting submit_one_case: tenant_id=%s, case_id=%s, case_name=%s, files_count=%d", 
+                    tenant_id, case_id, case_name, len(files))
+            
+            if not case_id or case_id == "":
+                logger.info("Creating new case for tenant_id: %s, case_name: %s", tenant_id, case_name)
+                
+                # Create a case
+                case_row = await self.sp_service.insert(
+                    table_name="cases",
+                    object={
+                        "tenant_id": tenant_id,
+                        "status": status.value,
+                        "case_name": case_name
+                    }
+                )
+
+                if not case_row or "id" not in case_row:
+                    logger.error("Failed to create case in database")
+                    return {"success": False, "error": "Failed to create case"}, None
+
+                case_id = case_row["id"]
+                logger.info("Successfully created case with id: %s", case_id)
+                
+                # Now proceed with model
+                logger.info("Proceeding with model for new case: %s", case_id)
+                try:
+                    result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files)
+                    logger.info("proceed_with_model completed for case: %s, result: %s", case_id, result)
+                    return result, case_id
+                except Exception as model_error:
+                    logger.error("Error in proceed_with_model for new case %s: %s", case_id, str(model_error), exc_info=True)
+                    return {"success": False, "error": f"Model processing failed: {str(model_error)}"}, case_id
+            
+            else:
+                logger.info("Using existing case: %s", case_id)
+                
+                if files:
+                    logger.info("Processing %d new files for existing case: %s", len(files), case_id)
+                    try:
+                        result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files)
+                        logger.info("proceed_with_model completed for existing case: %s", case_id)
+                        return result, case_id
+                    except Exception as model_error:
+                        logger.error("Error in proceed_with_model for existing case %s: %s", case_id, str(model_error), exc_info=True)
+                        return {"success": False, "error": f"Model processing failed: {str(model_error)}"}, case_id
+                else:
+                    logger.info("No new files, using history files for case: %s", case_id)
+                    try:
+                        result = await self.case_service.proceed_with_model_history_files(case_id)
+                        logger.info("proceed_with_model_history_files completed for case: %s", case_id)
+                        return result, case_id
+                    except Exception as model_error:
+                        logger.error("Error in proceed_with_model_history_files for case %s: %s", case_id, str(model_error), exc_info=True)
+                        return {"success": False, "error": f"History processing failed: {str(model_error)}"}, case_id
+
+        except Exception as e:
+            logger.error("Error in submit_one_case: tenant_id=%s, case_id=%s - %s", tenant_id, case_id, str(e), exc_info=True)
+            return {"success": False, "error": f"Submit case failed: {str(e)}"}, case_id

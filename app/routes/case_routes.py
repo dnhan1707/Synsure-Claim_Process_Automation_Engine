@@ -2,7 +2,7 @@ from app.controller.case_controller import CaseControllerV2, CaseControllerV3
 from app.controller.file_controller import FileController
 from app.service.task_service import get_task_status, get_tasks_status, submit_case_history
 from app.schema.schema import BulkSubmitRequest, BulkTaskStatusRequest
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi.responses import JSONResponse
 from fastapi import APIRouter, UploadFile, File, Form, Body
 
@@ -97,35 +97,22 @@ def create_case_route() -> APIRouter:
 
 
 
-
-
-    # @router.post("/submit")
-    # async def submit_one_case(
-    #     case_id: str = Form(None),
-    #     case_name: str = Form(None),
-    #     manual_input: str = Form(None),
-    #     files: List[UploadFile] = File(None),
-    # ):
-    #     try:
-    #         result, case_id = await case_controller_v2.submit_one_case(
-    #             case_id=case_id,
-    #             case_name=case_name,
-    #             manual_input=manual_input,
-    #             files=files)
-    #         return JSONResponse({"case_id": case_id,"success": True, "result": result}, status_code=200)
-    #     except Exception as e:
-    #         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-
-    # @router.post("/submit/bulk")
-    # async def submit_bulk(case_ids: List[str]):
-    #     try:
-    #         result = await case_controller_v2.submit_bulk(case_ids=case_ids)
-    #         if result.get("success"): 
-    #             return JSONResponse({"success": True}, status_code=200)
-
-    #     except Exception as e:
-    #         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    @router.post("/submit")
+    async def submit_one_case(
+        tenant_id: str,
+        case_name: str,
+        files: List[UploadFile],
+        case_id: Optional[str] = None
+    ):
+        try:
+            result, case_id = await case_controller_v3.submit_one_case(
+                tenant_id=tenant_id,
+                case_id=case_id,
+                case_name=case_name,
+                files=files)
+            return JSONResponse({"case_id": case_id,"success": True, "result": result}, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
     # @router.post("/v2/submit/bulk", status_code=202)
@@ -144,10 +131,6 @@ def create_case_route() -> APIRouter:
     #         accepted.append({"case_id": str(cid), "task_id": task_id})
     #     return JSONResponse({"success": True, "accepted": accepted}, status_code=202)
 
-    # @router.get("/tasks/{task_id}")
-    # async def get_celery_task(task_id: str):
-    #     # now returns in-process task status
-    #     return get_task_status(task_id)
 
     # @router.post("/tasks/status")
     # async def get_many_task_status(payload: BulkTaskStatusRequest):
@@ -243,5 +226,14 @@ def create_case_route() -> APIRouter:
     #         return JSONResponse({"success": True, "message": "Response file deleted successfully"}, status_code=200)
     #     except Exception as e:
     #         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-        
+    
+
+    '''
+    # TODO:
+    - File & Response connection
+    - Duplicate files
+    - Soft code the status
+    '''
+
+
     return router

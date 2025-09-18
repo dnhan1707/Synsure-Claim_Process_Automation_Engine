@@ -5,12 +5,14 @@ from fastapi import UploadFile
 from zoneinfo import ZoneInfo
 from PyPDF2 import PdfReader
 import datetime
+import logging
 import json
 import boto3
 import os
 import io
 import uuid
 
+logger = logging.getLogger(__name__)
 
 class FileService:
     def __init__(self):
@@ -58,7 +60,7 @@ class FileService:
             return {"error": str(e)}
 
 
-    async def save_files(self, files: List[UploadFile], case_id: str) -> Dict[str, Any]:
+    async def save_files(self, tenant_id: str, files: List[UploadFile], case_id: str) -> Dict[str, Any]:
         try:
             if not files:
                 return {"success": True, "s3_keys": []}
@@ -74,7 +76,7 @@ class FileService:
                     print(f"Warning: {file_info.filename} is empty and will not be uploaded.")
                     continue
 
-                s3_key = await self._generate_file_s3_key(case_id, file_info.filename or "", timestamp)
+                s3_key = await self._generate_file_s3_key(tenant_id, case_id, file_info.filename or "", timestamp)
                 
                 # Upload to S3
                 self.s3_client.upload_fileobj(
@@ -82,7 +84,7 @@ class FileService:
                     self.aws_bucket_name,
                     s3_key
                 )
-                saved_keys.append(s3_key)
+                saved_keys.append((s3_key, file_info.filename))
 
                 # Cache PDF text if applicable
                 await self._cache_pdf(content, s3_key)
@@ -92,23 +94,27 @@ class FileService:
             return {"error": str(e)}
 
 
-    async def save_respose_v2(self, response, case_id: str) -> Dict[str, Any]:
+    async def save_respose_v2(self, tenant_id: str, response: dict, case_id: str):
         try:
-            if not response:
-                return {"error": "Empty response provided"}
-
-            # Convert to JSON string if needed
-            response_str = await self._prepare_response_content(response)
-            s3_key = await self._generate_s3_key(case_id, '', 'response')
-
+            # Use correct S3 path structure: /tenant_id/case_id/response/response.json
+            s3_key = f"{tenant_id}/{case_id}/response/response_{case_id}.json"
+            
+            # Convert response to JSON string
+            response_json = json.dumps(response, indent=2)
+            
+            # Upload to S3
             self.s3_client.put_object(
                 Bucket=self.aws_bucket_name,
                 Key=s3_key,
-                Body=response_str.encode("utf-8")
+                Body=response_json.encode('utf-8'),
+                ContentType='application/json'
             )
-
-            return {"success": True, "s3_key": s3_key}
+            
+            logger.info("Uploaded response to S3: %s", s3_key)
+            return {"s3_key": s3_key}
+            
         except Exception as e:
+            logger.error("Error in save_respose_v2: %s", str(e), exc_info=True)
             return {"error": str(e)}
 
 
@@ -142,36 +148,32 @@ class FileService:
             return ""
 
 
-    async def save_files_from_bytes(self, items: List[Dict[str, Any]], case_id: str) -> Dict[str, Any]:
+    async def save_files_from_bytes(self, tenant_id: str, items: List[Dict[str, Any]], case_id: str):
         try:
-            if not items:
-                return {"success": True, "s3_keys": []}
-
-            timestamp = await self._generate_timestamp()
-            saved_keys: List[str] = []
-
+            s3_keys = []
             for item in items:
-                filename = (item.get("filename") or "").strip()
-                content = item.get("content")
+                filename = item["filename"]
+                content = item["content"]
                 
-                if not filename or not content:
-                    continue
-
-                s3_key = await self._generate_file_s3_key(case_id, filename, timestamp)
-
+                # Use correct S3 path structure: /tenant_id/case_id/uploads/filename
+                s3_key = f"{tenant_id}/{case_id}/uploads/{filename}"
+                
+                # Upload to S3
                 self.s3_client.put_object(
                     Bucket=self.aws_bucket_name,
                     Key=s3_key,
                     Body=content
                 )
-                saved_keys.append(s3_key)
-
-                # Cache PDF text if applicable
-                await self._cache_pdf(content, s3_key)
-
-            return {"success": True, "s3_keys": saved_keys}
+                
+                s3_keys.append((s3_key, filename))
+                logger.info("Uploaded file to S3: %s", s3_key)
+            
+            return {"s3_keys": s3_keys}
+            
         except Exception as e:
+            logger.error("Error in save_files_from_bytes: %s", str(e), exc_info=True)
             return {"error": str(e)}
+
 
 # -------------------------------------------------------- Helper ------------------------------------------
     async def _generate_timestamp(self) -> str:
@@ -180,24 +182,24 @@ class FileService:
         return now.strftime("%Y%m%dT%H%M%S")
 
 
-    async def _generate_s3_key(self, case_id: str, filename: str, file_type: str = "file") -> str:
+    async def _generate_s3_key(self, tenant_id: str, case_id: str, filename: str, file_type: str = "file") -> str:
         """Generate S3 key based on file type."""
         if file_type == "text":
             random_id = str(uuid.uuid4())
-            return f"{case_id}/text_input{random_id}.txt"
+            return f"/{tenant_id}/{case_id}/uploads/text_input{random_id}.txt"
         elif file_type == "response":
             timestamp = await self._generate_timestamp()
-            return f"{case_id}/response_{timestamp}.json"
+            return f"{tenant_id}/{case_id}/uploads/response_{timestamp}.json"
         else:
             timestamp = await self._generate_timestamp()
             base, ext = os.path.splitext(filename or "")
-            return f"{case_id}/{base}_{timestamp}{ext}" if base else f"upload_{timestamp}{ext or ''}"
+            return f"{tenant_id}/{case_id}/uploads/{base}_{timestamp}{ext}" if base else f"upload_{timestamp}{ext or ''}"
 
 
-    async def _generate_file_s3_key(self, case_id: str, filename: str, timestamp: str) -> str:
+    async def _generate_file_s3_key(self, tenant_id: str, case_id: str, filename: str, timestamp: str) -> str:
         """Generate S3 key for uploaded files with timestamp."""
         base, ext = os.path.splitext(filename)
-        return f"{case_id}/{base}_{timestamp}{ext}" if base else f"upload_{timestamp}{ext or ''}"
+        return f"{tenant_id}/{case_id}/{base}_{timestamp}{ext}" if base else f"upload_{timestamp}{ext or ''}"
 
 
     async def _prepare_response_content(self, response) -> str:
