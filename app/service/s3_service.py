@@ -1,6 +1,7 @@
 from app.config.settings import get_settings
 from typing import Dict, Any, List
 from app.service.caching_service import CachingService
+from app.service.supabase_service import SupabaseService
 from fastapi import UploadFile
 from zoneinfo import ZoneInfo
 from PyPDF2 import PdfReader
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class FileService:
     def __init__(self):
+        sp_service = SupabaseService()
         setting = get_settings()
         s3_setting = setting.s3
         self.s3_client = boto3.client(
@@ -66,7 +68,6 @@ class FileService:
                 return {"success": True, "s3_keys": []}
 
             saved_keys = []
-            timestamp = await self._generate_timestamp()
             
             for file_info in files:
                 await file_info.seek(0)
@@ -76,8 +77,9 @@ class FileService:
                     print(f"Warning: {file_info.filename} is empty and will not be uploaded.")
                     continue
 
-                s3_key = await self._generate_file_s3_key(tenant_id, case_id, file_info.filename or "", timestamp)
-                
+                # file_id = str(uuid.uuid4())
+                s3_key = f"{tenant_id}/{case_id}/uploads/{file_info.filename}" 
+                              
                 # Upload to S3
                 self.s3_client.upload_fileobj(
                     io.BytesIO(content),
@@ -92,6 +94,33 @@ class FileService:
             return {"success": True, "s3_keys": saved_keys}
         except Exception as e:
             return {"error": str(e)}
+        
+
+    async def save_one_file_with_assigned_key(self, file: UploadFile, assigned_key: str) -> bool:
+        try:
+            if not file:
+                return True
+            
+            await file.seek(0)
+            content = await file.read()
+            
+            if not content:
+                print(f"Warning: {file.filename} is empty and will not be uploaded.")
+                return False
+
+            # Upload to S3
+            self.s3_client.upload_fileobj(
+                io.BytesIO(content),
+                self.aws_bucket_name,
+                assigned_key
+            )
+
+            # Cache PDF text if applicable
+            # await self._cache_pdf(content, assigned_key)
+
+            return True
+        except Exception as e:
+            return False
 
 
     async def save_respose_v2(self, tenant_id: str, response: dict, case_id: str):

@@ -43,7 +43,7 @@ class SupabaseService():
             )
             return response.data 
         except Exception as e:
-            return {"error": str(e)}
+            return None
 
     
     async def update(self, table_name: str, id: str, objects: Dict[str, Any]):
@@ -207,3 +207,44 @@ class SupabaseService():
             print("Supabase Service Error - get_all", e)
             return None
     
+
+    async def count_file(self, tenant_id: str, case_id: str, filename: str):
+        try:
+            response = (
+                self.sp_client.table("files")
+                .select("id")
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .eq("name", filename)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return len(response.data)
+
+            return 0
+
+        except Exception as e:
+            return -1
+        
+    async def get_files_by_name(self, tenant_id: str, case_id: str, filename: str):
+        try:
+            response = (
+                self.sp_client.table("files")
+                .select("id, name, s3_key, s3_bucket, tenant_id, case_id, uploaded_at")
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .eq("name", filename)
+                .is_("deleted_at", "null")
+                .order("uploaded_at", desc=True)  # Get latest first
+                .execute()
+            )
+            
+            if response.data:
+                return response.data
+            return []
+            
+        except Exception as e:
+            return []
+

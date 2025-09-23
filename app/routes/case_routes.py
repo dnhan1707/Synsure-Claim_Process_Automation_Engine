@@ -1,14 +1,16 @@
 from app.controller.case_controller import CaseControllerV2, CaseControllerV3
 from app.controller.file_controller import FileController
 from app.service.task_service import get_task_status, get_tasks_status, submit_case_history
-from app.schema.schema import BulkSubmitRequest, BulkTaskStatusRequest
+from app.schema.schema import FileAction
 from typing import List, Dict, Any, Optional
 from fastapi.responses import JSONResponse
 from fastapi import APIRouter, UploadFile, File, Form, Body
+from app.service.checker import Checker
 
 case_controller_v2 = CaseControllerV2()
 case_controller_v3 = CaseControllerV3()
 file_controller = FileController()
+checker = Checker()
 
 def create_case_route() -> APIRouter:
     router = APIRouter(
@@ -65,24 +67,58 @@ def create_case_route() -> APIRouter:
     @router.post("/{tenant_id}/{case_id}/files")
     async def upload_files_existed_case(
         tenant_id: str,
-        case_name: str,
+        case_id: str,
         files: List[UploadFile],
+        file_actions: str = Form("[]")
     ):
-        try:
-            result = await case_controller_v3.upload_files_existed_case(
+        try:         
+            import json
+        
+            # Parse the JSON string
+            if file_actions == "[]" or not file_actions.strip():
+                file_actions_list = []
+            else:
+                try:
+                    file_actions_parsed = json.loads(file_actions)
+                    # Convert to FileAction objects (optional, or keep as dicts)
+                    file_actions_list = file_actions_parsed  # Keep as List[Dict]
+                except json.JSONDecodeError as e:
+                    return JSONResponse(
+                        {"success": False, "error": f"Invalid JSON in file_actions: {str(e)}"}, 
+                        status_code=400
+                    )   
+            result = await case_controller_v3.upload_files_existed_case_v2(
                 tenant_id=tenant_id,
-                case_name=case_name,
-                files=files
+                case_id=case_id,
+                files=files,
+                file_actions=file_actions_list,
             )
 
             if result: 
                 return JSONResponse({"success": True}, status_code=200)
             
-            return JSONResponse({"success": False, "error": "Error upload_files_existed_case route"}, status_code=500)
-        
+            return JSONResponse({"success": False, "error": "Upload failed"}, status_code=500)
+            
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-        
+
+    # NEW ROUTE
+    @router.post("/{tenant_id}/{case_id}/files/check")
+    async def check_duplicate_for_uploading(
+        tenant_id: str,
+        case_id: str,
+        files: list[UploadFile],
+    ):
+        try:
+            res = await checker.file_duplicate(
+                tenant_id=tenant_id,
+                case_id=case_id,
+                files=files
+            )
+            return JSONResponse(res, status_code=200)
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
 
 
     # @router.get("/{case_id}/latest-response")
@@ -94,7 +130,6 @@ def create_case_route() -> APIRouter:
     #         return JSONResponse({"success": True, "response": result}, status_code=200)
     #     except Exception as e:
     #         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
 
 
     @router.post("/submit")
@@ -230,7 +265,11 @@ def create_case_route() -> APIRouter:
 
     '''
     # TODO:
-    - File & Response connection
+    - File & Response connection : Done
+    - Check duplicate
+    - Route to proceed with action
+    - Submit bulk
+    - Get latest response
     - Duplicate files
     - Soft code the status
     '''

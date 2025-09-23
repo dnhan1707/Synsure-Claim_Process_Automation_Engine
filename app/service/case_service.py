@@ -199,6 +199,7 @@ class CaseService:
             logger.error("Error in save_manual_and_files for case_id %s: %s", case_id, str(e), exc_info=True)
             raise
 
+
     async def proceed_with_model(self, tenant_id: str, case_id: str, case_name: str, files: Optional[List[UploadFile]]):
         try:
             # logger.info("Starting proceed_with_model: case_id=%s, files_count=%d", case_id, len(files) if files else 0)
@@ -239,6 +240,7 @@ class CaseService:
         except Exception as e:
             logger.error("Error in proceed_with_model for case_id %s: %s", case_id, str(e), exc_info=True)
             raise
+
 
     async def proceed_with_model_history_files(self, tenant_id: str, case_id: str):
         """
@@ -302,7 +304,7 @@ class CaseService:
             if files:
                 for file in files:
                     file_id = str(uuid.uuid4())
-                    s3_key = f"{tenant_id}/{case_id}/uploads/{file_id}_{file.filename}"
+                    s3_key = f"{tenant_id}/{case_id}/uploads/{file.filename}"
 
                     # upload on S3
                     self.s3_client.upload_fileobj(file.file, self.aws_bucket_name, s3_key)
@@ -799,6 +801,7 @@ class CaseService:
             logger.error("Error loading text from S3 key %s: %s", s3_key, str(e), exc_info=True)
             return ""
 
+
     async def _link_existing_files_to_response(self, files_metadata: List[Dict], case_id: str, response_data_id: str) -> None:
         """Link existing files to a new response using the response_input_files junction table."""
         try:
@@ -833,6 +836,7 @@ class CaseService:
                 
         except Exception as e:
             logger.error("Error linking files to response %s: %s", response_data_id, str(e), exc_info=True)
+
 
     def _resolve_filename_conflict(self, original_filename: str, existing_names: List[str]) -> str:
             """
@@ -885,6 +889,7 @@ class CaseService:
             logger.error("Error downloading file from S3 %s: %s", s3_key, str(e))
             return None
 
+
     async def _get_processed_text_for_file(self, file_id: str) -> Optional[str]:
         """Check if there's already processed text for this file."""
         try:
@@ -895,6 +900,7 @@ class CaseService:
         except Exception as e:
             logger.error("Error getting processed text for file %s: %s", file_id, str(e))
             return None
+
 
     async def _extract_text_from_file_content(self, filename: str, content: bytes) -> Optional[str]:
         """Extract text from file content based on file type."""

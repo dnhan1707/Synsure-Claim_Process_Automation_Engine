@@ -3,7 +3,8 @@ from typing import List, Optional, Dict, Any
 from app.service.supabase_service import SupabaseService
 from app.service.s3_service import FileService
 from app.service.case_service import CaseService
-from app.schema.schema import CaseStatus
+from app.service.file_upload_manager import FileUploadManager
+from app.schema.schema import CaseStatus, FileAction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,6 @@ class CaseControllerV2():
         self.sp_service = SupabaseService()
         self.case_service = CaseService()
         self.file_service =  FileService()
-
 
     async def get_latest_response(self, case_id: str) -> Dict[str, Any]:
         try:
@@ -95,6 +95,8 @@ class CaseControllerV3():
     def __init__(self):
         self.sp_service = SupabaseService()
         self.case_service = CaseService()
+        self.file_upload_manager = FileUploadManager()
+
 
     async def get_all_cases(self, tenant_id: str) -> List[Dict[str, Any]]:
         try:
@@ -143,13 +145,96 @@ class CaseControllerV3():
     async def upload_files_existed_case(
             self,
             tenant_id: str, 
-            case_name: str,  
-            files: List[UploadFile]
+            case_id: str,  
+            files: List[UploadFile],
+            file_actions: list[FileAction]
         ) -> bool:
         try:
-            res = await self.case_service.upload_files_existed_case(tenant_id, case_name, files)
+            '''
+            upload-replace
+            upload-overwrite
+            upload-keep
+            '''
+            res = await self.case_service.upload_files_existed_case(tenant_id, case_id, files)
             return res
         except Exception as e:
+            return False
+        
+        
+    async def upload_files_existed_case_v2(
+        self,
+        tenant_id: str, 
+        case_id: str,  
+        files: List[UploadFile],
+        file_actions: List[Dict[str, Any]]
+    ) -> bool:
+        try:
+            logger.info("Starting upload_files_existed_case_v2: tenant_id=%s, case_id=%s, files_count=%d, actions_count=%d", 
+                    tenant_id, case_id, len(files), len(file_actions))
+            
+            # If no actions provided, upload normally
+            if not file_actions or len(file_actions) == 0:
+                logger.info("No actions found, uploading normally")
+                response = await self.file_upload_manager.upload_normal(tenant_id, case_id, files)
+                if not response:
+                    logger.error("upload_normal failed")
+                    return False
+                return True
+
+            # Validate that files and actions arrays match
+            if len(files) != len(file_actions):
+                logger.error("Files count (%d) doesn't match actions count (%d)", len(files), len(file_actions))
+                return False
+
+            # Process each file with its corresponding action
+            for idx, file in enumerate(files):
+                try:
+                    action_detail = file_actions[idx]
+                    
+                    # Fix: Access as properties, not dict keys
+                    target_id = ""
+                    if action_detail["target_id"]:
+                        target_id = action_detail["target_id"]
+
+                    action = action_detail["action"]
+                    
+                    logger.info("Processing file %d: %s with action: %s", idx, file.filename, action)
+                    
+                    if action == "upload":
+                        response = await self.file_upload_manager.upload_normal(tenant_id, case_id, [file])
+                        if not response:
+                            logger.error("upload_normal failed for file: %s", file.filename)
+                            return False
+                    
+                    elif action == "keep_both":
+                        response = await self.file_upload_manager.upload_keep_both(tenant_id, case_id, file)
+                        if not response:
+                            logger.error("upload_keep_both failed for file: %s", file.filename)
+                            return False
+
+                    elif action == "overwrite":
+                        # if not target_id:
+                        #     logger.error("overwrite action requires target_id for file: %s", file.filename)
+                        #     return False
+                        
+                        response = await self.file_upload_manager.upload_overwrite(tenant_id, case_id, file, target_id)
+                        if not response:
+                            logger.error("upload_overwrite failed for file: %s", file.filename)
+                            return False
+                    
+                    else:
+                        logger.error("Unknown action: %s for file: %s", action, file.filename)
+                        return False
+
+                except Exception as file_error:
+                    logger.error("Error processing file %d (%s): %s", idx, file.filename, str(file_error), exc_info=True)
+                    return False
+
+            logger.info("Successfully processed all %d files", len(files))
+            return True
+            
+        except Exception as e:
+            logger.error("Error in upload_files_existed_case_v2: %s", str(e), exc_info=True)
             return False
         
 
