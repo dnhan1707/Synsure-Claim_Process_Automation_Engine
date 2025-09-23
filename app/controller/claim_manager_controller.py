@@ -52,7 +52,7 @@ class ClaimManagerController:
 
         except Exception as e:
             logger.error("Error in get_claim_by_id for id: %s, case_name: %s - %s", id, str(e), exc_info=True)
-            return False
+            return {}
 
 
     async def get_all_claim(self) -> List[Dict[str, Any]]:

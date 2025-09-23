@@ -18,3 +18,4 @@ pytest-asyncio
 pytest-mock
 pytest-cov
 uuid
+python-docx

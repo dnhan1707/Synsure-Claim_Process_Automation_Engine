@@ -208,7 +208,7 @@ class ClaimManagerService:
     
     async def upload_files_existed_case(self, tenant_id: str, case_id: str, files: List[UploadFile]) -> bool:
         try:
-            logger.info("Starting file upload for case_id: %s with %d files", case_id, len(files))
+            # logger.info("Starting file upload for case_id: %s with %d files", case_id, len(files))
         
             logger.info("Found case for tenant_id: %s", tenant_id)
             

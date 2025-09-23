@@ -43,7 +43,7 @@ class SupabaseService():
             )
             return response.data 
         except Exception as e:
-            return {"error": str(e)}
+            return None
 
     
     async def update(self, table_name: str, id: str, objects: Dict[str, Any]):
@@ -66,7 +66,7 @@ class SupabaseService():
             response = (
                 self.sp_client.table(table_name)
                 .select("id, case_name")
-                .eq("is_active", True)
+                .is_("deleted_at", "null")
                 .execute()
             )
             if response.data and len(response.data) > 0:
@@ -77,23 +77,31 @@ class SupabaseService():
     
 
     async def get_files_by_case_id(self, case_id: str):
-        try:
+        try:            
             response = (
                 self.sp_client.table("files")
-                .select("id, s3_link, case_name, is_active")
+                .select("id, case_id, tenant_id, name, s3_key, s3_bucket, kind, uploaded_at")  # Fixed: s3_key not s3_link
                 .eq("case_id", case_id)
-                .eq("is_active", True)
+                .is_("deleted_at", "null")  # Fixed: use is_() for null checks
                 .execute()
             )
-            # Deduplicate by s3_link
-            seen = set()
-            unique_files = []
-            for row in response.data if response.data else []:
-                s3_link = row.get("s3_link")
-                if s3_link and s3_link not in seen:
-                    seen.add(s3_link)
-                    unique_files.append(row)
-            return unique_files
+            
+            
+            if response.data and len(response.data) > 0:
+                
+                # Deduplicate by s3_key if needed
+                seen = set()
+                unique_files = []
+                for row in response.data:
+                    s3_key = row.get("s3_key")  # Fixed: s3_key not s3_link
+                    if s3_key and s3_key not in seen:
+                        seen.add(s3_key)
+                        unique_files.append(row)
+
+                return unique_files
+            else:
+                return []
+                
         except Exception as e:
             return []
 
@@ -101,10 +109,10 @@ class SupabaseService():
     async def get_responses_by_case_id(self, case_id: str):
         try:
             response = (
-                self.sp_client.table("response")
-                .select("id, s3_link, case_id, is_active")
+                self.sp_client.table("responses")
+                .select("id, s3_link, case_id")
                 .eq("case_id", case_id)
-                .eq("is_active", True)
+                .is_("deleted_at", "null")
                 .execute()
             )
             return response.data if response.data else []
@@ -115,11 +123,11 @@ class SupabaseService():
     async def get_latest_response_by_case_id(self, case_id: str):
         try:
             response = (
-                self.sp_client.table("response")
-                .select("id, s3_link, created_at, is_active")
+                self.sp_client.table("responses")
+                .select("id, s3_link, created_at")
                 .eq("case_id", case_id)
-                .eq("is_active", True)
-                .order("created_at", desc=True)
+                .is_("deleted_at", "null")
+                .order("uploaded_at", desc=True)
                 .limit(1)
                 .execute()
             )
@@ -164,6 +172,23 @@ class SupabaseService():
         except Exception as e:
             print("Supabase Service Error - get_all", e)
             return None
+        
+    async def get_all_claim_by_tenant_id(self, table_name: str, tenant_id: str, columns: str):
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(columns)
+                .eq("tenant_id", tenant_id)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data
+
+            return None
+
+        except Exception as e:
+            print("Supabase Service Error - get_all", e)
+            return None
     
     async def get_row_by_id(self, id: str, table_name: str, columns: str):
         try:
@@ -182,3 +207,44 @@ class SupabaseService():
             print("Supabase Service Error - get_all", e)
             return None
     
+
+    async def count_file(self, tenant_id: str, case_id: str, filename: str):
+        try:
+            response = (
+                self.sp_client.table("files")
+                .select("id")
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .eq("name", filename)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return len(response.data)
+
+            return 0
+
+        except Exception as e:
+            return -1
+        
+    async def get_files_by_name(self, tenant_id: str, case_id: str, filename: str):
+        try:
+            response = (
+                self.sp_client.table("files")
+                .select("id, name, s3_key, s3_bucket, tenant_id, case_id, uploaded_at")
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .eq("name", filename)
+                .is_("deleted_at", "null")
+                .order("uploaded_at", desc=True)  # Get latest first
+                .execute()
+            )
+            
+            if response.data:
+                return response.data
+            return []
+            
+        except Exception as e:
+            return []
+
