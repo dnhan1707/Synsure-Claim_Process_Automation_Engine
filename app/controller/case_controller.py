@@ -5,11 +5,12 @@ from app.service.s3_service import FileService
 from app.service.case_service import CaseService
 from app.service.file_upload_manager import FileUploadManager
 from app.schema.schema import CaseStatus, FileAction
+from app.service.checker import Checker
 import logging
 
 logger = logging.getLogger(__name__)
 
-# This controller include the logic of the route
+# IGNORE THIS CLASS - GO FURTHER DOWN, THERE IS ANOTHER VERSION
 class CaseControllerV2():
     def __init__(self):
         self.sp_service = SupabaseService()
@@ -169,72 +170,11 @@ class CaseControllerV3():
         file_actions: List[Dict[str, Any]]
     ) -> bool:
         try:
-            logger.info("Starting upload_files_existed_case_v2: tenant_id=%s, case_id=%s, files_count=%d, actions_count=%d", 
-                    tenant_id, case_id, len(files), len(file_actions))
-            
-            # If no actions provided, upload normally
-            if not file_actions or len(file_actions) == 0:
-                logger.info("No actions found, uploading normally")
-                response = await self.file_upload_manager.upload_normal(tenant_id, case_id, files)
-                if not response:
-                    logger.error("upload_normal failed")
-                    return False
-                return True
-
-            # Validate that files and actions arrays match
-            if len(files) != len(file_actions):
-                logger.error("Files count (%d) doesn't match actions count (%d)", len(files), len(file_actions))
-                return False
-
-            # Process each file with its corresponding action
-            for idx, file in enumerate(files):
-                try:
-                    action_detail = file_actions[idx]
-                    
-                    # Fix: Access as properties, not dict keys
-                    target_id = ""
-                    if action_detail["target_id"]:
-                        target_id = action_detail["target_id"]
-
-                    action = action_detail["action"]
-                    
-                    logger.info("Processing file %d: %s with action: %s", idx, file.filename, action)
-                    
-                    if action == "upload":
-                        response = await self.file_upload_manager.upload_normal(tenant_id, case_id, [file])
-                        if not response:
-                            logger.error("upload_normal failed for file: %s", file.filename)
-                            return False
-                    
-                    elif action == "keep_both":
-                        response = await self.file_upload_manager.upload_keep_both(tenant_id, case_id, file)
-                        if not response:
-                            logger.error("upload_keep_both failed for file: %s", file.filename)
-                            return False
-
-                    elif action == "overwrite":
-                        # if not target_id:
-                        #     logger.error("overwrite action requires target_id for file: %s", file.filename)
-                        #     return False
-                        
-                        response = await self.file_upload_manager.upload_overwrite(tenant_id, case_id, file, target_id)
-                        if not response:
-                            logger.error("upload_overwrite failed for file: %s", file.filename)
-                            return False
-                    
-                    else:
-                        logger.error("Unknown action: %s for file: %s", action, file.filename)
-                        return False
-
-                except Exception as file_error:
-                    logger.error("Error processing file %d (%s): %s", idx, file.filename, str(file_error), exc_info=True)
-                    return False
-
-            logger.info("Successfully processed all %d files", len(files))
-            return True
-            
+            res = self.case_service.upload_logic(
+                tenant_id, case_id, files, file_actions
+            )
+            return res
         except Exception as e:
-            logger.error("Error in upload_files_existed_case_v2: %s", str(e), exc_info=True)
             return False
         
 
@@ -250,6 +190,7 @@ class CaseControllerV3():
         except Exception as e:
             logger.error("Error in update_claim_name: ", str(e), exc_info=True)
             return False
+
 
     async def remove_files(self, file_ids: List[str]) -> bool:
         """
@@ -269,6 +210,7 @@ class CaseControllerV3():
         except Exception as e:
             logger.error("Error in remove_files for file_ids: %s - %s", file_ids, str(e), exc_info=True)
             return False
+
 
     async def remove_case(self, case_id: str) -> bool:
         """
@@ -295,8 +237,9 @@ class CaseControllerV3():
         case_id: Optional[str],
         case_name: str,
         files: List[UploadFile],
-        status: CaseStatus = CaseStatus.processing
-    ) -> Dict[str, Any]:
+        file_actions: Optional[List[Dict[str, Any]]],
+        status: CaseStatus = CaseStatus.processing, 
+    ) -> tuple[Dict[str, Any], Optional[str]]:
         try:
             # logger.info("Starting submit_one_case: tenant_id=%s, case_id=%s, case_name=%s, files_count=%d", 
             #         tenant_id, case_id, case_name, len(files))
@@ -324,7 +267,7 @@ class CaseControllerV3():
                 # Now proceed with model
                 logger.info("Proceeding with model for new case: %s", case_id)
                 try:
-                    result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files)
+                    result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files, file_actions or [])
                     logger.info("proceed_with_model completed for case: %s, result: %s", case_id, result)
                     return result, case_id
                 except Exception as model_error:
@@ -335,26 +278,41 @@ class CaseControllerV3():
                 logger.info("Using existing case: %s", case_id)
                 
                 # Verify the case exists and belongs to tenant
-                case_info = await self.sp_service.get_row_by_id(
-                    id=case_id,
-                    table_name="cases",
-                    columns="id, tenant_id, case_name"
-                )
+                # case_info = await self.sp_service.get_row_by_id(
+                #     id=case_id,
+                #     table_name="cases",
+                #     columns="id, tenant_id, case_name"
+                # )
                 
-                if not case_info:
-                    logger.error("Case %s not found", case_id)
-                    return {"success": False, "error": "Case not found"}, case_id
+                # if not case_info:
+                #     logger.error("Case %s not found", case_id)
+                #     return {"success": False, "error": "Case not found"}, case_id
                 
-                if case_info["tenant_id"] != tenant_id:
-                    logger.error("Case %s does not belong to tenant %s", case_id, tenant_id)
-                    return {"success": False, "error": "Unauthorized"}, case_id
+                # if case_info["tenant_id"] != tenant_id:
+                #     logger.error("Case %s does not belong to tenant %s", case_id, tenant_id)
+                #     return {"success": False, "error": "Unauthorized"}, case_id
                 
                 if files:
                     logger.info("Processing %d new files for existing case: %s", len(files), case_id)
                     try:
-                        result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files)
-                        logger.info("proceed_with_model completed for existing case: %s", case_id)
-                        return result, case_id
+                        # check duplicate first
+                        if file_actions == None or len(file_actions) == 0:
+                            checker = Checker()
+                            duplicate_res = await checker.file_duplicate(tenant_id, case_id, files)
+                            if duplicate_res["has_duplicates"] == True:
+                                logger.warning("Duplicate found, asking user for action")
+                                return duplicate_res, case_id
+                            else:
+                                result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files, [])
+                                logger.info("proceed_with_model since no duplicate found: %s", case_id)
+                                return result, case_id
+
+
+                        else:
+                            # NOTE: file actions has something, so we have to improve proceed model
+                            result = await self.case_service.proceed_with_model(tenant_id, case_id, case_name, files, file_actions)
+                            logger.info("proceed_with_model completed for existing case: %s", case_id)
+                            return result, case_id
                     except Exception as model_error:
                         logger.error("Error in proceed_with_model for existing case %s: %s", case_id, str(model_error), exc_info=True)
                         return {"success": False, "error": f"Model processing failed: {str(model_error)}"}, case_id
@@ -367,7 +325,24 @@ class CaseControllerV3():
                     except Exception as model_error:
                         logger.error("Error in proceed_with_model_history_files for case %s: %s", case_id, str(model_error), exc_info=True)
                         return {"success": False, "error": f"History processing failed: {str(model_error)}"}, case_id
-        
+
+
+            '''
+            check duplicate 
+                no duplicate
+                    proceed with model
+
+                there are duplicates
+                    user choose action
+                    submit again with action files
+                    proceed_advanced (handle the duplicate files)
+                 
+            '''
+
         except Exception as e:
             logger.error("Error in submit_one_case: tenant_id=%s, case_id=%s - %s", tenant_id, case_id, str(e), exc_info=True)
             return {"success": False, "error": f"Submit case failed: {str(e)}"}, case_id
+        
+
+
+
