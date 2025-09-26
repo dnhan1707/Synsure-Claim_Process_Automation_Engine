@@ -1,5 +1,6 @@
 from app.service.supabase_service import SupabaseService
 from app.config.settings import get_settings
+from app.service.file_upload_manager import FileUploadManager
 from app.service.s3_service import FileService
 from app.service.model_service import ModelService
 from app.schema.schema import CaseStatus
@@ -18,6 +19,7 @@ class CaseService:
         self.file_service = FileService()
         self.model_service = ModelService()
         self.sp_service = SupabaseService()
+        self.file_upload_manager = FileUploadManager()
 
         setting = get_settings()
         s3_setting = setting.s3
@@ -142,9 +144,11 @@ class CaseService:
         case_name: str,
         files: Optional[List[UploadFile]],
         response_data_id: Optional[str],
+        file_actions: List[Dict[str, Any]],
         file_contents: Optional[List[Dict[str, Any]]] = None
     ) -> None:
         try:
+            # file_contents has {filename: ..., content: ...}
             # logger.info("Starting save_manual_and_files: case_id=%s, files_count=%d, file_contents_count=%d", 
                     # case_id, len(files) if files else 0, len(file_contents) if file_contents else 0)
             
@@ -153,17 +157,48 @@ class CaseService:
             # Save files using bytes if provided; else fall back to UploadFile flow
             if file_contents:
                 logger.info("Processing file contents...")
-                uploaded_files = await self.save_uploaded_files_from_contents(
-                    file_contents, tenant_id, case_id, case_name, response_data_id
-                )
+
+                if file_actions and len(file_actions) > 0:
+                    if len(file_contents) != len(file_actions):
+                        logger.error("File contents count (%d) doesn't match actions count (%d)", 
+                                len(file_contents), len(file_actions))
+                        raise Exception("File contents and actions count mismatch")
+
+                            
+                    uploaded_files = await self._save_files_with_actions_from_contents(
+                        file_contents, tenant_id, case_id, file_actions, response_data_id
+                    )
+                else:
+                    # No actions - use normal upload
+                    uploaded_files = await self.save_uploaded_files_from_contents(
+                        file_contents, tenant_id, case_id, case_name, response_data_id
+                    )
+
                 files_to_insert.extend(uploaded_files)
                 logger.info("Processed %d file contents, got %d metadata records", 
                         len(file_contents), len(uploaded_files))
+                
             elif files:
-                logger.info("Processing UploadFile objects...")
-                uploaded_files = await self.save_uploaded_files(files, case_id, tenant_id, case_name, response_data_id)
+                logger.info("Processing UploadFile objects with actions...")
+                
+                # Validate actions match files
+                if file_actions and len(file_actions) > 0:
+                    if len(files) != len(file_actions):
+                        logger.error("Files count (%d) doesn't match actions count (%d)", 
+                                    len(files), len(file_actions))
+                        raise Exception("Files and actions count mismatch")
+                    
+                    # Process each file with its corresponding action
+                    uploaded_files = await self._save_files_with_actions_from_uploads(
+                        files, tenant_id, case_id, file_actions, response_data_id
+                    )
+                else:
+                    # No actions - use normal upload
+                    uploaded_files = await self.save_uploaded_files(files, case_id, tenant_id, case_name, response_data_id)
+                
                 files_to_insert.extend(uploaded_files)
-                logger.info("Processed %d UploadFile objects", len(uploaded_files))
+                logger.info("Processed %d UploadFile objects, got %d metadata records", 
+                        len(files), len(uploaded_files))
 
             # Bulk insert new files
             if files_to_insert and response_data_id:
@@ -200,9 +235,9 @@ class CaseService:
             raise
 
 
-    async def proceed_with_model(self, tenant_id: str, case_id: str, case_name: str, files: Optional[List[UploadFile]]):
+    async def proceed_with_model(self, tenant_id: str, case_id: str, case_name: str, files: Optional[List[UploadFile]], file_actions: List[Dict[str, Any]]):
         try:
-            # logger.info("Starting proceed_with_model: case_id=%s, files_count=%d", case_id, len(files) if files else 0)
+            logger.info("Starting proceed_with_model: case_id=%s, files_count=%d", case_id, len(files) if files else 0)
             
             # Read file contents for model processing
             file_contents = await self._read_uploaded_files(files) if files else []
@@ -218,20 +253,21 @@ class CaseService:
             response_data_id = await self._save_model_response(tenant_id, response, case_id)
             
             if not response_data_id:
-                logger.error("Failed to save model response, cannot proceed with file relationships")
+                logger.error("Failed to save model response")
                 return response
                 
             logger.info("Model response saved with ID: %s", response_data_id)
             
-            # Save files to S3 and database with response relationship
-            logger.info("Saving files and creating relationships...")
+            # Save files with duplicate handling and create relationships
+            logger.info("Saving files with actions and creating relationships...")
             await self.save_manual_and_files(
                 tenant_id=tenant_id,
                 case_id=case_id, 
                 case_name=case_name,
                 files=None,  # Don't pass consumed files
-                response_data_id=response_data_id,  # Pass the response ID
-                file_contents=file_contents  # Use the file contents we read
+                response_data_id=response_data_id,
+                file_contents=file_contents,  # Pass consumed file contents
+                file_actions=file_actions  # Pass the actions for duplicate handling
             )
             logger.info("Files and relationships saved successfully")
             
@@ -968,3 +1004,265 @@ class CaseService:
         except Exception as e:
             logger.error("Error extracting text from %s: %s", filename, str(e), exc_info=True)
             return None
+        
+
+    async def upload_logic(
+        self,
+        tenant_id: str, 
+        case_id: str,  
+        files: List[UploadFile],
+        file_actions: List[Dict[str, Any]],
+        response_data_id: Optional[str]
+    ) -> bool:
+        try:
+            logger.info("Starting upload_files_existed_case_v2: tenant_id=%s, case_id=%s, files_count=%d, actions_count=%d", 
+                    tenant_id, case_id, len(files), len(file_actions))
+            
+            # If no actions provided, upload normally
+            if not file_actions or len(file_actions) == 0:
+                logger.info("No actions found, uploading normally")
+                response = await self.file_upload_manager.upload_normal(tenant_id, case_id, files)
+                if not response:
+                    logger.error("upload_normal failed")
+                    return False
+                return True
+
+            # Validate that files and actions arrays match
+            if len(files) != len(file_actions):
+                logger.error("Files count (%d) doesn't match actions count (%d)", len(files), len(file_actions))
+                return False
+
+            # Process each file with its corresponding action
+            for idx, file in enumerate(files):
+                try:
+                    action_detail = file_actions[idx]
+                    
+                    # Fix: Access as properties, not dict keys
+                    target_id = ""
+                    if action_detail["target_id"]:
+                        target_id = action_detail["target_id"]
+
+                    action = action_detail["action"]
+                    
+                    logger.info("Processing file %d: %s with action: %s", idx, file.filename, action)
+                    
+                    if action == "upload":
+                        response = await self.file_upload_manager.upload_normal(tenant_id, case_id, [file])
+                        if not response:
+                            logger.error("upload_normal failed for file: %s", file.filename)
+                            return False
+                    
+                    elif action == "keep_both":
+                        response = await self.file_upload_manager.upload_keep_both(tenant_id, case_id, file)
+                        if not response:
+                            logger.error("upload_keep_both failed for file: %s", file.filename)
+                            return False
+
+                    elif action == "overwrite":
+                        # if not target_id:
+                        #     logger.error("overwrite action requires target_id for file: %s", file.filename)
+                        #     return False
+                        
+                        response = await self.file_upload_manager.upload_overwrite(tenant_id, case_id, file, target_id)
+                        if not response:
+                            logger.error("upload_overwrite failed for file: %s", file.filename)
+                            return False
+                    
+                    else:
+                        logger.error("Unknown action: %s for file: %s", action, file.filename)
+                        return False
+
+                except Exception as file_error:
+                    logger.error("Error processing file %d (%s): %s", idx, file.filename, str(file_error), exc_info=True)
+                    return False
+
+            logger.info("Successfully processed all %d files", len(files))
+            return True
+            
+        except Exception as e:
+            logger.error("Error in upload_files_existed_case_v2: %s", str(e), exc_info=True)
+            return 
+        
+    async def _save_files_with_actions_from_contents(
+        self,
+        file_contents: List[Dict[str, Any]],
+        tenant_id: str,
+        case_id: str,
+        file_actions: List[Dict[str, Any]],
+        response_data_id: Optional[str]
+    ) -> List[dict]:
+        """Save files from contents with duplicate resolution actions."""
+        try:
+            logger.info("Processing %d file contents with actions", len(file_contents))
+            
+            files_metadata = []
+            
+            for idx, file_content in enumerate(file_contents):
+                filename = file_content.get("filename")
+                content = file_content.get("content")
+                action_detail = file_actions[idx]
+                action = action_detail.get("action")
+                target_id = action_detail.get("target_id")
+                
+                logger.info("Processing file content %d: %s with action: %s", idx, filename, action)
+                
+                if action == "upload":
+                    # Normal upload
+                    file_metadata = await self._save_single_file_from_content(
+                        filename, content, tenant_id, case_id, filename
+                    )
+                    
+                elif action == "keep_both":
+                    # Generate new filename and upload
+                    count_res = await self.sp_service.count_file(tenant_id, case_id, filename)
+                    if count_res <= 0:
+                        logger.warning("No duplicates found for keep_both action: %s", filename)
+                        count_res = 1  # Default to (1) suffix
+                    
+                    base_name, extension = self._split_filename(filename)
+                    resolved_name = f"{base_name} ({count_res}){extension}"
+                    
+                    file_metadata = await self._save_single_file_from_content(
+                        filename, content, tenant_id, case_id, resolved_name
+                    )
+                    
+                elif action == "overwrite":
+                    # Find existing file and overwrite
+                    if target_id:
+                        existing_file = await self.sp_service.get_row_by_id(
+                            id=target_id, table_name="files",
+                            columns="id, s3_key, s3_bucket, name"
+                        )
+                    else:
+                        # Find by filename
+                        existing_files = await self.sp_service.get_files_by_name(
+                            tenant_id=tenant_id, case_id=case_id, filename=filename
+                        )
+                        existing_file = existing_files[0] if existing_files else None
+                    
+                    if existing_file:
+                        # Overwrite existing file
+                        file_metadata = await self._overwrite_file_from_content(
+                            filename, content, tenant_id, case_id, existing_file
+                        )
+                    else:
+                        logger.error("No existing file found to overwrite for: %s", filename)
+                        continue
+                else:
+                    logger.error("Unknown action: %s", action)
+                    continue
+                
+                if file_metadata:
+                    files_metadata.append(file_metadata)
+            
+            logger.info("Successfully processed %d files from contents", len(files_metadata))
+            return files_metadata
+            
+        except Exception as e:
+            logger.error("Error in _save_files_with_actions_from_contents: %s", str(e), exc_info=True)
+            return []
+
+
+    async def _save_single_file_from_content(
+        self,
+        original_filename: str,
+        content: bytes,
+        tenant_id: str,
+        case_id: str,
+        final_filename: str
+    ) -> Optional[dict]:
+        """Save a single file from content bytes."""
+        try:
+            # Create S3 key
+            s3_key = f"{tenant_id}/{case_id}/uploads/{final_filename}"
+            
+            # Save to S3 using bytes
+            file_content_dict = {"filename": original_filename, "content": content}
+            result = await self.file_service.save_files_from_bytes(
+                tenant_id=tenant_id, 
+                items=[file_content_dict], 
+                case_id=case_id
+            )
+            
+            if not result or not result.get("s3_keys"):
+                logger.error("Failed to save file %s to S3", final_filename)
+                return None
+            
+            s3_key_actual = result["s3_keys"][0][0]  # Get actual S3 key
+            
+            # Prepare file metadata
+            return {
+                "id": str(uuid.uuid4()),
+                "case_id": case_id,
+                "tenant_id": tenant_id,
+                "kind": "raw_upload",
+                "name": final_filename,
+                "s3_bucket": self.aws_bucket_name,
+                "s3_key": s3_key_actual,
+                "uploaded_at": "now()"
+            }
+            
+        except Exception as e:
+            logger.error("Error saving file %s from content: %s", final_filename, str(e))
+            return None
+
+
+    async def _overwrite_file_from_content(
+        self,
+        filename: str,
+        content: bytes,
+        tenant_id: str,
+        case_id: str,
+        existing_file: dict
+    ) -> Optional[dict]:
+        """Overwrite an existing file with new content."""
+        try:
+            existing_s3_key = existing_file["s3_key"]
+            
+            # Save new content to same S3 key (overwrites)
+            s3_response = await self.file_service.save_one_file_with_assigned_key_from_bytes(
+                content, filename, existing_s3_key
+            )
+            
+            if not s3_response:
+                logger.error("Failed to overwrite S3 file: %s", existing_s3_key)
+                return None
+            
+            # Update existing file metadata (don't create new record)
+            update_result = await self.sp_service.update(
+                table_name="files",
+                id=existing_file["id"],
+                objects={
+                    "name": filename,
+                    "uploaded_at": "now()"
+                }
+            )
+            
+            if not update_result:
+                logger.error("Failed to update file metadata for overwrite")
+                return None
+            
+            # Return the existing file info (it's already in DB)
+            return {
+                "id": existing_file["id"],
+                "case_id": case_id,
+                "tenant_id": tenant_id,
+                "kind": "raw_upload",
+                "name": filename,
+                "s3_bucket": existing_file["s3_bucket"],
+                "s3_key": existing_s3_key,
+                "uploaded_at": "now()"
+            }
+            
+        except Exception as e:
+            logger.error("Error overwriting file %s: %s", filename, str(e))
+            return None
+
+
+    def _split_filename(self, filename: str) -> tuple[str, str]:
+        """Split filename into base name and extension."""
+        if '.' in filename:
+            parts = filename.rsplit('.', 1)
+            return parts[0], '.' + parts[1]
+        else:
+            return filename, ''

@@ -136,15 +136,33 @@ def create_case_route() -> APIRouter:
     async def submit_one_case(
         tenant_id: str,
         case_name: str,
+        file_actions: str = Form("[]"),
         files: List[UploadFile] = None,
         case_id: Optional[str] = None
     ):
         try:
+            import json
+        
+            # Parse the JSON string
+            if file_actions == "[]" or not file_actions.strip():
+                file_actions_list = []
+            else:
+                try:
+                    file_actions_parsed = json.loads(file_actions)
+                    # Convert to FileAction objects (optional, or keep as dicts)
+                    file_actions_list = file_actions_parsed  # Keep as List[Dict]
+                except json.JSONDecodeError as e:
+                    return JSONResponse(
+                        {"success": False, "error": f"Invalid JSON in file_actions: {str(e)}"}, 
+                        status_code=400
+                    )   
+                
             result, case_id = await case_controller_v3.submit_one_case(
                 tenant_id=tenant_id,
                 case_id=case_id,
                 case_name=case_name,
-                files=files)
+                file_actions=file_actions_list,
+                files=files or [])
             return JSONResponse({"case_id": case_id,"success": True, "result": result}, status_code=200)
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
@@ -266,7 +284,7 @@ def create_case_route() -> APIRouter:
     '''
     # TODO:
     - File & Response connection : Done
-    - Check duplicate
+    - Check duplicate: Done
     - Route to proceed with action
     - Submit bulk
     - Get latest response

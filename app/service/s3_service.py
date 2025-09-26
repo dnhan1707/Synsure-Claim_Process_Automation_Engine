@@ -270,3 +270,23 @@ class FileService:
             return text
         except Exception:
             return ""
+        
+
+    async def save_one_file_with_assigned_key_from_bytes(
+        self, 
+        content: bytes, 
+        filename: str, 
+        s3_key: str
+    ) -> bool:
+        """Save file content directly to a specific S3 key."""
+        try:
+            import io
+            
+            file_obj = io.BytesIO(content)
+            self.s3_client.upload_fileobj(file_obj, self.aws_bucket_name, s3_key)
+            logger.info("Successfully uploaded %s to S3 key: %s", filename, s3_key)
+            return True
+            
+        except Exception as e:
+            logger.error("Error uploading %s to S3: %s", filename, str(e))
+            return False

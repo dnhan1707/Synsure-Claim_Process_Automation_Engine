@@ -1,7 +1,11 @@
 from app.config.settings import get_settings
 from supabase import Client, create_client
 from typing import Dict, Any, List
+import logging
+import re
+import os
 
+logger = logging.getLogger(__name__)
 
 class SupabaseService():
     def __init__(self):
@@ -157,6 +161,7 @@ class SupabaseService():
         except Exception as e:
             return None
 
+
     async def get_all(self, table_name: str, columns: str):
         try:
             response = (
@@ -173,6 +178,7 @@ class SupabaseService():
             print("Supabase Service Error - get_all", e)
             return None
         
+
     async def get_all_claim_by_tenant_id(self, table_name: str, tenant_id: str, columns: str):
         try:
             response = (
@@ -189,6 +195,7 @@ class SupabaseService():
         except Exception as e:
             print("Supabase Service Error - get_all", e)
             return None
+    
     
     async def get_row_by_id(self, id: str, table_name: str, columns: str):
         try:
@@ -228,6 +235,7 @@ class SupabaseService():
         except Exception as e:
             return -1
         
+
     async def get_files_by_name(self, tenant_id: str, case_id: str, filename: str):
         try:
             response = (
@@ -248,3 +256,168 @@ class SupabaseService():
         except Exception as e:
             return []
 
+
+
+class SupabaseServiceV2():
+    def __init__(self):
+        setting = get_settings()
+        sp_setting = setting.supabase
+        url, key = "", ""
+
+        if setting.env and setting.env == "development":
+            url, key = sp_setting.url_development, sp_setting.api_key_development
+            # print("using developemt supabase development")
+        else:
+            url, key = sp_setting.url, sp_setting.api_key
+
+        self.sp_client: Client = create_client(url, key)
+
+    async def get_all_cases_by_tenant(self, table_name: str, columns: str, tenant_id: str, available: bool = True):
+        try:
+            if available:
+                response = (
+                    self.sp_client.table(table_name)
+                    .select(columns)
+                    .eq("tenant_id", tenant_id)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+                
+                if response.data and len(response.data) > 0:
+                    return response.data
+            
+            else:
+                response = (
+                    self.sp_client.table(table_name)
+                    .select(columns)
+                    .eq("tenant_id", tenant_id)
+                    .execute()
+                )
+                
+                if response.data and len(response.data) > 0:
+                    return response.data
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error get_all_cases_by_tenant {e}")
+            return None
+
+    async def get_case(self, table_name: str, columns: str, tenant_id: str, case_id: str):
+        try:
+            response = (
+                    self.sp_client.table(table_name)
+                    .select(columns)
+                    .eq("tenant_id", tenant_id)
+                    .eq("id", case_id)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+                    
+            if response.data and len(response.data) > 0:
+                return response.data[0]        
+        
+        except Exception as e:
+            logger.error(f"Error get_case {e}")
+            return None
+        
+    async def get_s3_keys(self, table_name: str, columns: str, tenant_id: str, case_id: str):
+        try:
+            response = (
+                    self.sp_client.table(table_name)
+                    .select(columns)
+                    .eq("tenant_id", tenant_id)
+                    .eq("case_id", case_id)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+                    
+            if response.data and len(response.data) > 0:
+                return response.data    
+        
+        except Exception as e:
+            logger.error(f"Error get_case {e}")
+            return None
+    
+    async def get_by_id(self, table_name: str, columns: str, id: str):
+        try:
+            response = (
+                    self.sp_client.table(table_name)
+                    .select(columns)
+                    .eq("id", id)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+                    
+            if response.data and len(response.data) > 0:
+                return response.data[0]    
+
+            return None
+        
+        except Exception as e:
+            logger.error(f"Error get_case {e}")
+            return None
+
+    
+    async def insert_one(self, table_name: str, object: dict) -> str:
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .insert(object)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error insert_one: {e}")
+            return None
+        
+    async def insert_bulk(self, table_name: str, list_object: list[dict]) -> str:
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .insert(list_object)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return response.data
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error insert_one: {e}")
+            return None
+        
+    
+    async def find_duplicates_by_filename(self, table_name: str, columns: str, tenant_id: str, case_id: str, target_filename: str):
+        base_filename = self.normalize_filename(target_filename)
+
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(columns)
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .ilike("name", f"{base_filename.replace('.','%')}")
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return response.data
+
+            return []
+
+        except Exception as e:
+            logger.error(f"Error find_duplicates_by_filename: {e}")
+            return []
+
+    def normalize_filename(self, filename: str) -> str:
+        name, ext = os.path.splitext(filename)
+        # remove ' (n)' at the end of filename if exists
+        normalized = re.sub(r"\s\(\d+\)$", "", name)
+        return f"{normalized}{ext}"
