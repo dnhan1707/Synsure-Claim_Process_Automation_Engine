@@ -149,3 +149,21 @@ class CaseService:
         except Exception as e:
             logger.error("Error submit_one")
             return ("", {})
+
+
+    async def get_latest_response(self, tenant_id: str, case_id: str):
+        try:
+            response_row = await self.sp_service.get_latest_response(tenant_id, case_id)
+            s3_key = response_row["s3_key"]
+            response_data = await self.s3_service.get_response_file_data(s3_key)
+
+            if not response_data:
+                logger.error(f"Failed to retrieve response data from S3 key: {s3_key}")
+                return {}
+            
+            return response_data
+
+        except Exception as e:
+            logger.error("Error get_latest_response")
+            return {}
+
