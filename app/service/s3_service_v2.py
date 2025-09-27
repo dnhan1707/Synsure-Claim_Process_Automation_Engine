@@ -161,3 +161,44 @@ class S3Service:
         except Exception as e:
             logger.error(f"Error getting raw bytes from S3 {s3_key}: {e}")
             return b""
+    
+
+    async def get_response_file_data(self, s3_key: str) -> dict:
+        """
+        Get response JSON data from S3.
+        
+        Args:
+            s3_key (str): S3 key of the response JSON file
+            
+        Returns:
+            dict: Parsed JSON data from S3, or empty dict if failed
+        """
+        try:
+            logger.info(f"Getting response file data from S3 key: {s3_key}")
+            
+            def _get_response_json():
+                response = self.s3_client.get_object(
+                    Bucket=self.aws_bucket_name,
+                    Key=s3_key
+                )
+                file_bytes = response["Body"].read()
+
+                if not file_bytes:
+                    raise ValueError(f"S3 returned empty content for key={s3_key}")
+
+                # Parse JSON from bytes
+                json_content = file_bytes.decode('utf-8')
+                return json.loads(json_content)
+
+            response_data = await asyncio.to_thread(_get_response_json)
+            
+            logger.info(f"Successfully retrieved response data from S3: {s3_key}")
+            return response_data
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in S3 file {s3_key}: {e}")
+            return {"error": f"Invalid JSON format: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Error getting response file data from {s3_key}: {e}", exc_info=True)
+            return {"error": str(e)}
+            

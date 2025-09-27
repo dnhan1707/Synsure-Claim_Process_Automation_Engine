@@ -421,3 +421,23 @@ class SupabaseServiceV2():
         # remove ' (n)' at the end of filename if exists
         normalized = re.sub(r"\s\(\d+\)$", "", name)
         return f"{normalized}{ext}"
+
+    async def get_latest_response(self, tenant_id: str, case_id: str):
+        try:
+            response = (
+                self.sp_client.table("responses")
+                .select("id, s3_key, started_at")
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .is_("deleted_at", "null")
+                .order("started_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            
+            return None
+        
+        except Exception as e:
+            return None
