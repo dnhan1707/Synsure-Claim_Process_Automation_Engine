@@ -147,3 +147,17 @@ class S3Service:
             logger.error(f"Error get_file_content_by_key for {s3_key}: {e}")
             return ""
 
+    async def get_file_raw_bytes(self, s3_key: str) -> bytes:
+        """Get raw file bytes from S3."""
+        try:
+            def _get_bytes():
+                response = self.s3_client.get_object(
+                    Bucket=self.aws_bucket_name,
+                    Key=s3_key
+                )
+                return response["Body"].read()
+            
+            return await asyncio.to_thread(_get_bytes)
+        except Exception as e:
+            logger.error(f"Error getting raw bytes from S3 {s3_key}: {e}")
+            return b""
