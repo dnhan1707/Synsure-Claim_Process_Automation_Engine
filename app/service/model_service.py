@@ -22,6 +22,7 @@ class ModelService():
                 
             base_prompt = get_prompt(details)
             prompt = base_prompt
+            # print(f"PROMPT: {prompt}")
             MAX_RETRIES = 2
 
             for attempt in range(MAX_RETRIES + 1):

@@ -103,11 +103,10 @@ class SubmissionService:
                     return None
 
                 s3_key = file_data["s3_key"]
-                read_content = await self.s3_service.get_file_content_by_key(s3_key)
-
+                raw_content = await self.s3_service.get_file_raw_bytes(s3_key)
                 return {
                     "filename": file_data["name"],
-                    "content": read_content
+                    "content": raw_content
                 }
 
             # process all files concurrently

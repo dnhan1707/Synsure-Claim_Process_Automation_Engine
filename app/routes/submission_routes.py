@@ -62,10 +62,14 @@ def create_submission_routes2() -> APIRouter:
             model_response = await submission_service.submit_with_chosen_files(
                 tenant_id, case_id, chosen_files
             )
-            return JSONResponse({"success": False, "result": model_response}, status_code=200)
+            
+            # ✅ Check if we got valid response
+            if not model_response or model_response == {}:
+                return JSONResponse({"success": False, "error": "No content generated"}, status_code=500)
+                
+            return JSONResponse({"success": True, "result": model_response}, status_code=200)  # ✅ Fixed
 
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-
+        
     return router
