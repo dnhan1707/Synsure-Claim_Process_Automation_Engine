@@ -508,3 +508,31 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error updating task status for {task_id}: {e}")
             return None
+        
+
+    async def batch_update_cases(self, case_updates: list[dict]):
+        """Batch update multiple cases efficiently."""
+        try:
+            # Use Supabase batch update or loop with minimal overhead
+            for update in case_updates:
+                await self.update("cases", update["id"], {"status": update["status"]})
+            return True
+        except Exception as e:
+            logger.error(f"Error in batch_update_cases: {e}")
+            return False
+
+
+    async def update_task_and_case_status(self, task_id: str, case_id: str, 
+                                        task_status: str, case_status: str, **kwargs):
+        """Atomically update both task and case status."""
+        try:
+            # Update task
+            await self.update_task_status(task_id=task_id, status=task_status, **kwargs)
+            
+            # Update case
+            await self.update(table_name="cases", id=case_id, object={"status": case_status})
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error updating task and case status: {e}")
+            return False

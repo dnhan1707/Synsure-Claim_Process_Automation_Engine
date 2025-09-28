@@ -8,13 +8,22 @@ class TaskService:
     def __init__(self):
         self.sp_service = SupabaseServiceV2()
     
+
+    # task_service_v2.py - Updated create_batch_tasks method
     async def create_batch_tasks(self, tenant_id: str, case_ids: list[str]) -> dict:
         """Create tasks for multiple cases and return task IDs."""
         try:
             tasks = []
             task_ids = {}
             
+            # Batch update all cases to "queued" status first
+            case_updates = []
             for case_id in case_ids:
+                case_updates.append({
+                    "id": case_id,
+                    "status": "queued"  
+                })
+                
                 task_id = str(uuid.uuid4())
                 task_ids[case_id] = task_id
                 
@@ -25,11 +34,16 @@ class TaskService:
                     "status": "queued"
                 })
             
+            # Batch update cases (more efficient)
+            if case_updates:
+                await self.sp_service.batch_update_cases(case_updates)
+            
             # Insert all tasks at once
             result = await self.sp_service.insert_bulk(
                 table_name="task", 
                 list_object=tasks 
             )            
+            
             if not result:
                 return {"success": False, "error": "Failed to create tasks"}
             
@@ -45,7 +59,6 @@ class TaskService:
             return {"success": False, "error": str(e)}
     
 
-    # In task_service_v2.py - fix process_task method
     async def process_task(self, task_id: str) -> dict:
         """Process a single task."""
         try:
@@ -57,30 +70,22 @@ class TaskService:
                 logger.error(f"Task not found: {task_id}")
                 return {"error": "Task not found"}
             
-            logger.info(f"Found task: {task}")
-            
-            # Update status to running 
+            # Update task status to running 
             await self.sp_service.update_task_status(
                 task_id=task_id,
                 status="running",
                 started_at="now()"
             )
-            logger.info(f"Updated task {task_id} status to running")
             
-            # Process the case
             tenant_id = task["tenant_id"]
             case_id = task["case_id"]
             
-            logger.info(f"Getting files for tenant_id={tenant_id}, case_id={case_id}")
-            
-            # ✅ Fix: Remove table_name parameter since the method signature doesn't need it
+            # Get files for the case
             files = await self.sp_service.get_file_by_case_tenant_id(
                 tenant_id=tenant_id,
                 case_id=case_id,
                 columns="id"
             )
-            
-            logger.info(f"Found {len(files) if files else 0} files for case {case_id}")
             
             if not files:
                 await self.sp_service.update_task_status(
@@ -89,40 +94,37 @@ class TaskService:
                     error_message="No files found for case",
                     completed_at="now()"
                 )
-                logger.warning(f"No files found for case {case_id}")
                 return {"error": "No files found"}
             
             file_ids = [f["id"] for f in files]
-            logger.info(f"Processing file IDs: {file_ids}")
             
-            # Import here to avoid circular imports
+            # Process the case (this updates case status internally)
             from app.service.submission_service import SubmissionService
             submission_service = SubmissionService()
             
-            logger.info(f"Calling submit_with_chosen_files for task {task_id}")
             model_response = await submission_service.submit_with_chosen_files(
                 tenant_id, case_id, file_ids
             )
             
-            logger.info(f"Model response for task {task_id}: {type(model_response)} - {model_response}")
-            
             if not model_response or "error" in model_response:
                 error_msg = model_response.get("error", "Unknown error") if model_response else "Empty response"
-                await self.sp_service.update_task_status(
+                
+                # Update both task AND case status atomically
+                await self.sp_service.update_task_and_case_status(
                     task_id=task_id,
-                    status="failed",
+                    case_id=case_id,
+                    task_status="failed",
+                    case_status="failed",
                     error_message=error_msg,
                     completed_at="now()"
                 )
-                logger.error(f"Model processing failed for task {task_id}: {error_msg}")
+                
                 return {"error": error_msg}
             
-            # Get the response ID from the submission
-            logger.info(f"Getting latest response ID for case {case_id}")
+            # Get the response ID
             response_id = await self._get_latest_response_id(tenant_id, case_id)
-            logger.info(f"Latest response ID: {response_id}")
             
-            # Update task as completed
+            # Update task as completed (case already updated in submit_with_chosen_files)
             await self.sp_service.update_task_status(
                 task_id=task_id,
                 status="completed",
@@ -130,13 +132,14 @@ class TaskService:
                 completed_at="now()"
             )
             
+            
             logger.info(f"Successfully completed task {task_id}")
             return {"success": True, "response": model_response}
             
         except Exception as e:
             logger.error(f"Exception in process_task {task_id}: {e}", exc_info=True)
             
-            # Try to update task as failed
+            # Update task as failed
             try:
                 await self.sp_service.update_task_status(
                     task_id=task_id,

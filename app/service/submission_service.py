@@ -29,6 +29,8 @@ class SubmissionService:
             for file in files:
                 content = await file.read()
                 file_contents.append({"filename": file.filename, "content": content})
+                
+            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, case_name, files, status="running")
 
             model_service = ModelService()
             model_response = await model_service.generate_response_v2(
@@ -39,7 +41,6 @@ class SubmissionService:
                 logger.error("Error model_response is not dict")
                 return {}
             
-            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, case_name, files)
             
             # save into s3
             new_response_file_id = str(uuid.uuid4())
@@ -55,7 +56,8 @@ class SubmissionService:
                     "id": new_response_file_id,
                     "tenant_id": tenant_id,
                     "case_id": new_case_id,
-                    "s3_key": response_file_key
+                    "s3_key": response_file_key,
+                    "status": model_response.get("decision", "unknown")
                 }
             )
 
@@ -75,7 +77,13 @@ class SubmissionService:
                 logger.error("Error insert_bulk in submit_new_case")
                 return ("", {})
 
-
+            if model_response.get("decision"):
+                await self.sp_service.update(
+                    table_name="cases",
+                    id=new_case_id,
+                    object={"status": model_response["decision"]}
+                )
+                
             return (new_case_id, model_response)
         
         except Exception as e:
@@ -96,8 +104,27 @@ class SubmissionService:
                 logger.error("No valid files found in submit_with_chosen_files")
                 return {}
 
+            # Update case status to "running"
+            await self.sp_service.update(
+                table_name="cases",
+                id=case_id,
+                object={"status": "running"}
+            )
+
             # Generate model response
             model_response = await self.model_response.generate_response_v2(read_data)
+
+            # Validate model response
+            if not isinstance(model_response, dict) or "decision" not in model_response:
+                logger.error("Invalid model response format")
+                
+                # Update case status to failed
+                await self.sp_service.update(
+                    table_name="cases",
+                    id=case_id,
+                    object={"status": "failed"}
+                )
+                return {"error": "Invalid model response"}
 
             # Save into S3
             new_response_file_id = str(uuid.uuid4())
@@ -106,32 +133,78 @@ class SubmissionService:
             )
             if not response_file_key:
                 logger.error("Error save_response_json in submit_with_chosen_files")
+                
+                # Update case status to failed
+                await self.sp_service.update(
+                    table_name="cases",
+                    id=case_id,
+                    object={"status": "failed"}
+                )
                 return {}
             
-            # Save into responses table
-            await self.sp_service.insert_one(
+            # Save into responses table with status
+            response_insert_result = await self.sp_service.insert_one(
                 table_name="responses",
                 object={
                     "id": new_response_file_id,
                     "tenant_id": tenant_id,
                     "case_id": case_id,
-                    "s3_key": response_file_key
+                    "s3_key": response_file_key,
+                    "status": model_response["decision"]  # Added status field
                 }
             )
 
+            if not response_insert_result:
+                logger.error("Failed to insert response record")
+                
+                # Update case status to failed
+                await self.sp_service.update(
+                    table_name="cases",
+                    id=case_id,
+                    object={"status": "failed"}
+                )
+                return {}
+
             # Save into response_input_files table
             rows = [{"file_id": fid, "response_id": new_response_file_id} for fid in chosen_files]
-            await self.sp_service.insert_bulk(
+            bulk_insert_result = await self.sp_service.insert_bulk(
                 table_name="response_input_files", 
                 list_object=rows  
             )
 
+            if not bulk_insert_result:
+                logger.error("Failed to insert response input files")
+                # Don't fail the whole operation for this
+
+            #  Update case status to final decision
+            case_status_update = await self.sp_service.update(
+                table_name="cases",
+                id=case_id,
+                object={"status": model_response["decision"]}
+            )
+
+            if not case_status_update:
+                logger.error("Failed to update case status to final decision")
+                # Don't fail the whole operation, but log it
+
+            logger.info(f"Successfully processed case {case_id} with decision: {model_response['decision']}")
             return model_response
 
         except Exception as e:
-            logger.error(f"Error submit_with_chosen_files: {e}")
+            logger.error(f"Error submit_with_chosen_files: {e}", exc_info=True)
+            
+            # Update case status to failed on exception
+            try:
+                await self.sp_service.update(
+                    table_name="cases",
+                    id=case_id,
+                    object={"status": "failed"}
+                )
+            except Exception as update_error:
+                logger.error(f"Failed to update case status to failed: {update_error}")
+            
             return {}
-
+        
 
     async def _process_file(self, file_id: str):
         file_data = await self.sp_service.get_by_id(
