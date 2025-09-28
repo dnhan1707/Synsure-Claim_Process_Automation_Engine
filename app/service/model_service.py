@@ -1,4 +1,4 @@
-from app.service.s3_service import FileService
+from app.service.s3_service_v2 import S3Service
 from app.utils.validator import Validator
 from app.config.settings import get_prompt, get_settings
 # from fastapi import UploadFile
@@ -15,8 +15,8 @@ class ModelService():
 
     async def generate_response_v2(self, file_contents: list, manual_input: str = None):
         try:
-            file_service = FileService()
-            details = await file_service.extract_text(file_contents)
+            s3_service = S3Service()
+            details = await s3_service.extract_text(file_contents)
             if manual_input:
                 details += manual_input
                 

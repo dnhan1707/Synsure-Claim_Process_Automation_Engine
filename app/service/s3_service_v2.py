@@ -38,7 +38,20 @@ class S3Service:
         except Exception as e:
             logger.error(f"Error generate_accessible_link: {e}")
             return ""
-        
+    
+    async def extract_text(self, file_contents: list[dict[str, any]]) -> str:
+        try:
+            file_texts = []
+            for file_info in file_contents:
+                content = file_info["content"]
+                reader = PdfReader(io.BytesIO(content))
+                text = ""
+                for page in reader.pages:
+                    text += page.extract_text() or ""
+                file_texts.append(text)
+            return "".join(file_texts)
+        except Exception as e:
+            return f"Error extracting text: {e}"
 
     async def save_with_key(self, file: UploadFile, s3_key: str) -> bool:
         loop = asyncio.get_event_loop()

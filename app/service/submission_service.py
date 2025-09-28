@@ -90,28 +90,7 @@ class SubmissionService:
         chosen_files: list[str]  # list of file IDs
     ) -> dict:
         try:
-            read_data = []
-
-            async def _process_file(file_id: str):
-                file_data = await self.sp_service.get_by_id(
-                    table_name="files",
-                    columns="name, s3_key",
-                    id=file_id
-                )
-                if not file_data:
-                    logger.warning(f"File not found for id={file_id}")
-                    return None
-
-                s3_key = file_data["s3_key"]
-                raw_content = await self.s3_service.get_file_raw_bytes(s3_key)
-                return {
-                    "filename": file_data["name"],
-                    "content": raw_content
-                }
-
-            # process all files concurrently
-            results = await asyncio.gather(*[_process_file(fid) for fid in chosen_files])
-            read_data = [r for r in results if r]
+            read_data = await self.process_all_files_concurrently(chosen_files)
 
             if not read_data:
                 logger.error("No valid files found in submit_with_chosen_files")
@@ -142,10 +121,123 @@ class SubmissionService:
 
             # Save into response_input_files table
             rows = [{"file_id": fid, "response_id": new_response_file_id} for fid in chosen_files]
-            await self.sp_service.insert_bulk("response_input_files", rows)
+            await self.sp_service.insert_bulk(
+                table_name="response_input_files", 
+                list_object=rows  
+            )
 
             return model_response
 
         except Exception as e:
             logger.error(f"Error submit_with_chosen_files: {e}")
             return {}
+
+
+    async def _process_file(self, file_id: str):
+        file_data = await self.sp_service.get_by_id(
+            table_name="files",
+            columns="name, s3_key",
+            id=file_id
+        )
+        if not file_data:
+            logger.warning(f"File not found for id={file_id}")
+            return None
+
+        s3_key = file_data["s3_key"]
+        raw_content = await self.s3_service.get_file_raw_bytes(s3_key)
+        return {
+            "filename": file_data["name"],
+            "content": raw_content
+        }
+
+
+    async def process_all_files_concurrently(self, chosen_files: list[str]):
+        read_data = []
+
+        # process all files concurrently
+        results = await asyncio.gather(*[self._process_file(fid) for fid in chosen_files])
+        read_data = [r for r in results if r]
+
+        return read_data
+
+
+    async def submit_many_async(self, tenant_id: str, case_ids: list[str]) -> dict:
+        """Submit cases for async processing using task queue."""
+        try:
+            if not case_ids:
+                return {"error": "Empty case_ids list"}
+            
+            logger.info(f"submit_many_async called with tenant_id={tenant_id}, case_ids={case_ids}")
+            
+            # Import here to avoid circular imports
+            from app.service.task_service_v2 import TaskService
+            task_service = TaskService()
+            
+            # Create task records
+            logger.info("Creating batch tasks...")
+            task_result = await task_service.create_batch_tasks(tenant_id, case_ids)
+            logger.info(f"Task creation result: {task_result}")
+            
+            if not task_result["success"]:
+                return task_result
+            
+            task_ids = task_result["task_ids"]
+            task_id_list = list(task_ids.values())
+            
+            # Start background processing (don't wait)
+            logger.info(f"Starting background processing for task IDs: {task_id_list}")
+            asyncio.create_task(self._process_tasks_background(task_id_list))
+            
+            return {
+                "success": True,
+                "message": f"Submitted {len(case_ids)} cases for processing",
+                "task_ids": task_ids,
+                "status_check_info": "Use /task/status/{tenant_id}?task_ids=id1,id2,id3 to check status"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in submit_many_async: {e}", exc_info=True)
+            return {"error": str(e)}
+
+
+    async def _process_tasks_background(self, task_ids: list[str]):
+        """Process tasks in background without blocking the response."""
+        try:
+            logger.info(f"Background processing started for {len(task_ids)} tasks: {task_ids}")
+            
+            from app.service.task_service_v2 import TaskService
+            task_service = TaskService()
+            
+            # Process up to 3 tasks concurrently to avoid overwhelming the system
+            semaphore = asyncio.Semaphore(3)
+            
+            async def _process_with_semaphore(task_id: str):
+                async with semaphore:
+                    try:
+                        logger.info(f"Starting to process task {task_id}")
+                        result = await task_service.process_task(task_id)
+                        logger.info(f"Task {task_id} processing result: {result}")
+                        return result
+                    except Exception as e:
+                        logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
+                        return {"error": str(e)}
+            
+            # Process all tasks concurrently
+            results = await asyncio.gather(
+                *[_process_with_semaphore(tid) for tid in task_ids],
+                return_exceptions=True
+            )
+            
+            # Log results
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Task {task_ids[i]} failed with exception: {result}")
+                else:
+                    logger.info(f"Task {task_ids[i]} completed with result: {result}")
+            
+            logger.info(f"Completed background processing of {len(task_ids)} tasks")
+            
+        except Exception as e:
+            logger.error(f"Error in background task processing: {e}", exc_info=True)
+
+

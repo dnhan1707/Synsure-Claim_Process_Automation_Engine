@@ -441,3 +441,70 @@ class SupabaseServiceV2():
         
         except Exception as e:
             return None
+        
+    async def get_file_by_case_tenant_id(self, tenant_id: str, case_id: str, columns: str):
+        try:
+            response = (
+                self.sp_client.table("files")
+                .select(columns)
+                .eq("tenant_id", tenant_id)
+                .eq("case_id", case_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data
+            
+            return None
+        except Exception as e:
+            return None
+        
+
+    async def update(self, table_name: str, id: str, object: dict):
+        """Update a record by ID."""
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .update(object)
+                .eq("id", id)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Error updating {table_name}: {e}")
+            return None
+
+    async def update_task_status(self, task_id: str, status: str, **kwargs):
+        """Update task status with optional additional fields."""
+        try:
+            update_data = {"status": status}
+            
+            # Add optional fields
+            if "started_at" in kwargs:
+                update_data["started_at"] = kwargs["started_at"]
+            if "completed_at" in kwargs:
+                update_data["completed_at"] = kwargs["completed_at"]
+            if "error_message" in kwargs:
+                update_data["error_message"] = kwargs["error_message"]
+            if "response_id" in kwargs:
+                update_data["response_id"] = kwargs["response_id"]
+            
+            response = (
+                self.sp_client.table("task")
+                .update(update_data)
+                .eq("id", task_id)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                logger.info(f"Task {task_id} status updated to {status}")
+                return response.data[0]
+            else:
+                logger.warning(f"No task updated for ID {task_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error updating task status for {task_id}: {e}")
+            return None
