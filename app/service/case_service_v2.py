@@ -70,7 +70,7 @@ class CaseService:
             return None
 
 
-    async def create_new_case(self, tenant_id: str, case_name: str, files: list[UploadFile]):
+    async def create_new_case(self, tenant_id: str, case_name: str, files: list[UploadFile], status: str):
         try:
             # save in table cases
             cases_table_response = await self.sp_service.insert_one(
@@ -78,7 +78,7 @@ class CaseService:
                 object={
                     "tenant_id": tenant_id,
                     "case_name": case_name,
-                    "status": "open"
+                    "status": status
                 }
             )
             new_case_id = cases_table_response["id"]
