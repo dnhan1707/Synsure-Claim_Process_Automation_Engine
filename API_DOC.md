@@ -15,7 +15,6 @@
 <li><a href="#authentication">Authentication</a></li>
 <li><a href="#response-format">Response Format</a></li>
 <li><a href="#tenants-api">Tenants API</a></li>
-<li><a href="#claims-management-api">Claims Management API</a></li>
 <li><a href="#cases-api">Cases API</a></li>
 <li><a href="#files-api">Files API</a></li>
 <li><a href="#ai-processing-api">AI Processing API</a></li>
