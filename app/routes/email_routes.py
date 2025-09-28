@@ -7,7 +7,8 @@ email_service = EmailService()
 
 def create_email_route() -> APIRouter:
     router = APIRouter(
-        prefix="/email"
+        prefix="/email",
+        tags=["Email"]
     )
 
     @router.post("/")
