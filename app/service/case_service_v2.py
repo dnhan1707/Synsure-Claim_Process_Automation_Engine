@@ -167,3 +167,148 @@ class CaseService:
             logger.error("Error get_latest_response")
             return {}
 
+
+    async def delete_case(self, tenant_id: str, case_id: str):
+        """
+        Delete a case and all its related data (soft delete by default).
+        
+        Args:
+            tenant_id (str): Tenant ID
+            case_id (str): Case ID to delete
+            
+        Returns:
+            dict: Success status and details of what was deleted
+        """
+        try:
+            logger.info(f"Starting case deletion for tenant {tenant_id}, case {case_id}")
+            
+            # Step 1: Get all S3 keys that need to be deleted (files + responses)
+            s3_keys_to_delete = []
+            
+            # Get file S3 keys
+            file_records = await self.sp_service.get_s3_keys(
+                table_name="files",
+                columns="s3_key",
+                tenant_id=tenant_id,
+                case_id=case_id
+            )
+            
+            if file_records:
+                s3_keys_to_delete.extend([record["s3_key"] for record in file_records if record.get("s3_key")])
+            
+            # Get response S3 keys  
+            response_records = await self.sp_service.get_s3_keys(
+                table_name="responses",
+                columns="s3_key",
+                tenant_id=tenant_id,
+                case_id=case_id
+            )
+            
+            if response_records:
+                s3_keys_to_delete.extend([record["s3_key"] for record in response_records if record.get("s3_key")])
+            
+            # Step 2: Get response IDs for deleting response_input_files
+            deleted_response_ids = []
+            if response_records:
+                # First get all response IDs before soft deleting
+                full_response_records = await self.sp_service.get_s3_keys(
+                    table_name="responses",
+                    columns="id",
+                    tenant_id=tenant_id,
+                    case_id=case_id
+                )
+                if full_response_records:
+                    deleted_response_ids = [record["id"] for record in full_response_records]
+            
+            # Step 3: Delete from S3 (if there are files to delete)
+            s3_deletion_success = True
+            if s3_keys_to_delete:
+                logger.info(f"Deleting {len(s3_keys_to_delete)} S3 objects")
+                s3_deletion_success = await self.s3_service.delete(s3_keys_to_delete)
+                if not s3_deletion_success:
+                    logger.warning("S3 deletion failed, but continuing with database cleanup")
+            
+            # Step 4: Soft delete database records in proper order
+            deletion_results = {
+                "s3_files_deleted": len(s3_keys_to_delete) if s3_deletion_success else 0,
+                "s3_deletion_success": s3_deletion_success
+            }
+            
+            # Delete response_input_files (by response_id)
+            response_input_files_deleted = []
+            for response_id in deleted_response_ids:
+                deleted_ids = await self._delete_response_input_files_by_response_id(response_id)
+                response_input_files_deleted.extend(deleted_ids)
+            
+            deletion_results["response_input_files_deleted"] = len(response_input_files_deleted)
+            
+            # Delete tasks
+            deleted_task_ids = await self.sp_service.delete_by_tenant_id_case_id(
+                table_name="task",
+                tenant_id=tenant_id,
+                case_id=case_id,
+                soft_delete=True
+            )
+            deletion_results["tasks_deleted"] = len(deleted_task_ids)
+            
+            # Delete responses  
+            deleted_response_ids_db = await self.sp_service.delete_by_tenant_id_case_id(
+                table_name="responses",
+                tenant_id=tenant_id,
+                case_id=case_id,
+                soft_delete=True
+            )
+            deletion_results["responses_deleted"] = len(deleted_response_ids_db)
+            
+            # Delete files
+            deleted_file_ids = await self.sp_service.delete_by_tenant_id_case_id(
+                table_name="files",
+                tenant_id=tenant_id,
+                case_id=case_id,
+                soft_delete=True
+            )
+            deletion_results["files_deleted"] = len(deleted_file_ids)
+            
+            # Delete case (last)
+            deleted_case_ids = await self.sp_service.delete_by_tenant_id_case_id(
+                table_name="cases",
+                tenant_id=tenant_id,
+                case_id=case_id,
+                soft_delete=True
+            )
+            deletion_results["cases_deleted"] = len(deleted_case_ids)
+            
+            logger.info(f"Case deletion completed: {deletion_results}")
+            
+            return {
+                "success": True,
+                "message": "Case deleted successfully",
+                "details": deletion_results
+            }
+
+        except Exception as e:
+            logger.error(f"Error delete_case: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "details": {}
+            }
+
+    async def _delete_response_input_files_by_response_id(self, response_id: str):
+        """Helper method to delete response_input_files by response_id."""
+        try:
+            response = await self.sp_service.sp_client.table("response_input_files")\
+                .update({"deleted_at": "now()"})\
+                .eq("response_id", response_id)\
+                .is_("deleted_at", "null")\
+                .execute()
+                
+            if response.data:
+                deleted_ids = [record["id"] for record in response.data]
+                logger.info(f"Soft deleted {len(deleted_ids)} response_input_files for response {response_id}")
+                return deleted_ids
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error deleting response_input_files for response {response_id}: {e}")
+            return []

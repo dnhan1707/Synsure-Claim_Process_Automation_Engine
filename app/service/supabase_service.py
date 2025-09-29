@@ -536,3 +536,83 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error updating task and case status: {e}")
             return False
+        
+    
+    async def delete_by_tenant_id_case_id(self, table_name: str, tenant_id: str, case_id: str, soft_delete: bool = True):
+        """
+        Delete records by tenant_id and case_id, returning the IDs of deleted records.
+        """
+        try:
+            if soft_delete:
+                # Soft delete: Update deleted_at column with current timestamp
+                response = (
+                    self.sp_client.table(table_name)
+                    .update({"deleted_at": "now()"})
+                    .eq("tenant_id", tenant_id)
+                    .eq("case_id", case_id)
+                    .is_("deleted_at", "null")  
+                    .execute()
+                )
+                
+                if response.data:
+                    deleted_ids = [record["id"] for record in response.data]
+                    logger.info(f"Soft deleted {len(deleted_ids)} records from {table_name} for tenant {tenant_id}, case {case_id}. IDs: {deleted_ids}")
+                    return deleted_ids
+                else:
+                    logger.info(f"No records found to soft delete from {table_name} for tenant {tenant_id}, case {case_id}")
+                    return []
+            else:
+                # Hard delete: Permanently remove records
+                response = (
+                    self.sp_client.table(table_name)
+                    .delete()
+                    .eq("tenant_id", tenant_id)
+                    .eq("case_id", case_id)
+                    .execute()
+                )
+                
+                if response.data:
+                    deleted_ids = [record["id"] for record in response.data]
+                    logger.info(f"Hard deleted {len(deleted_ids)} records from {table_name} for tenant {tenant_id}, case {case_id}. IDs: {deleted_ids}")
+                    return deleted_ids
+                else:
+                    logger.info(f"No records found to hard delete from {table_name} for tenant {tenant_id}, case {case_id}")
+                    return []
+
+        except Exception as e:
+            logger.error(f"Error delete_by_tenant_id_case_id: {e}")
+            return []
+        
+        
+    async def delete_by_response_id(self, table_name: str, response_id: str, soft_delete: bool = True):
+        """
+        Delete records by response_id, returning the IDs of deleted records.
+        """
+        try:
+            if soft_delete:
+                response = (
+                    self.sp_client.table(table_name)
+                    .update({"deleted_at": "now()"})
+                    .eq("response_id", response_id)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+            else:
+                response = (
+                    self.sp_client.table(table_name)
+                    .delete()
+                    .eq("response_id", response_id)
+                    .execute()
+                )
+                
+            if response.data:
+                deleted_ids = [record["id"] for record in response.data]
+                logger.info(f"{'Soft' if soft_delete else 'Hard'} deleted {len(deleted_ids)} records from {table_name} for response {response_id}")
+                return deleted_ids
+            else:
+                logger.info(f"No records found to delete from {table_name} for response {response_id}")
+                return []
+
+        except Exception as e:
+            logger.error(f"Error delete_by_response_id: {e}")
+            return []

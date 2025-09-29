@@ -124,4 +124,77 @@ def create_case_routes_v2() -> APIRouter:
                 status_code=500
             )
 
+    
+    @router.delete("/{tenant_id}/{case_id}")
+    async def delete_case(
+        tenant_id: str = Path(..., description="Tenant ID"),
+        case_id: str = Path(..., description="Case ID")
+    ):
+        """
+        Delete a case and all its related data.
+        
+        This will soft delete:
+        - The case record
+        - All associated files 
+        - All responses
+        - All tasks
+        - All response input files
+        - Delete actual files from S3 storage
+        
+        Returns success status and deletion details.
+        """
+        try:
+            logger.info(f"Delete case request for tenant {tenant_id}, case {case_id}")
+            
+            # Check if case exists first
+            case_exists = await case_service.sp_service.get_case(
+                table_name="cases",
+                columns="id, case_name",
+                tenant_id=tenant_id,
+                case_id=case_id
+            )
+            
+            if not case_exists:
+                return JSONResponse(
+                    {
+                        "success": False, 
+                        "error": "Case not found or already deleted",
+                        "details": {}
+                    }, 
+                    status_code=404
+                )
+            
+            # Perform the deletion
+            result = await case_service.delete_case(tenant_id, case_id)
+            
+            if result["success"]:
+                return JSONResponse(
+                    {
+                        "success": True,
+                        "message": result["message"],
+                        "details": result["details"]
+                    },
+                    status_code=200
+                )
+            else:
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": result["error"],
+                        "details": result.get("details", {})
+                    },
+                    status_code=500
+                )
+                
+        except Exception as e:
+            logger.error(f"Error in delete_case route: {e}", exc_info=True)
+            return JSONResponse(
+                {
+                    "success": False, 
+                    "error": str(e),
+                    "details": {}
+                }, 
+                status_code=500
+            )
+
     return router

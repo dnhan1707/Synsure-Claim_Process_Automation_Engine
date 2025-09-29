@@ -215,3 +215,104 @@ class S3Service:
             logger.error(f"Error getting response file data from {s3_key}: {e}", exc_info=True)
             return {"error": str(e)}
             
+    
+
+    async def delete(self, s3_keys: list[str]) -> bool:
+        """
+        Delete multiple objects from S3.
+        
+        Args:
+            s3_keys (list[str]): List of S3 keys to delete
+            
+        Returns:
+            bool: True if all deletions successful, False otherwise
+        """
+        if not s3_keys:
+            logger.warning("No S3 keys provided for deletion")
+            return True  # Nothing to delete is considered success
+            
+        try:
+            logger.info(f"Deleting {len(s3_keys)} objects from S3")
+            
+            # For single file deletion
+            if len(s3_keys) == 1:
+                return await self._delete_single_object(s3_keys[0])
+            
+            # For multiple files, use batch deletion (more efficient)
+            return await self._delete_multiple_objects(s3_keys)
+            
+        except Exception as e:
+            logger.error(f"Error in delete method: {e}", exc_info=True)
+            return False
+
+
+    async def _delete_single_object(self, s3_key: str) -> bool:
+        """Delete a single object from S3."""
+        try:
+            def _delete():
+                self.s3_client.delete_object(
+                    Bucket=self.aws_bucket_name,
+                    Key=s3_key
+                )
+            
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _delete)
+            
+            logger.info(f"Successfully deleted S3 object: {s3_key}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting S3 object {s3_key}: {e}")
+            return False
+
+
+    async def _delete_multiple_objects(self, s3_keys: list[str]) -> bool:
+        """Delete multiple objects from S3 using batch deletion."""
+        try:
+            # S3 batch delete supports max 1000 objects per request
+            batch_size = 1000
+            all_successful = True
+            
+            for i in range(0, len(s3_keys), batch_size):
+                batch_keys = s3_keys[i:i + batch_size]
+                
+                # Prepare objects for batch deletion
+                objects_to_delete = [{'Key': key} for key in batch_keys]
+                
+                def _delete_batch():
+                    response = self.s3_client.delete_objects(
+                        Bucket=self.aws_bucket_name,
+                        Delete={
+                            'Objects': objects_to_delete,
+                            'Quiet': False  # Set to False to get detailed response
+                        }
+                    )
+                    return response
+                
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, _delete_batch)
+                
+                # Check for errors in the batch deletion
+                if 'Errors' in response and response['Errors']:
+                    logger.error(f"Batch deletion errors: {response['Errors']}")
+                    all_successful = False
+                    
+                    # Log each failed deletion
+                    for error in response['Errors']:
+                        logger.error(f"Failed to delete {error['Key']}: {error['Message']}")
+                
+                # Log successful deletions
+                if 'Deleted' in response:
+                    logger.info(f"Successfully deleted {len(response['Deleted'])} objects in batch")
+            
+            if all_successful:
+                logger.info(f"Successfully deleted all {len(s3_keys)} S3 objects")
+            else:
+                logger.warning(f"Some deletions failed out of {len(s3_keys)} objects")
+                
+            return all_successful
+            
+        except Exception as e:
+            logger.error(f"Error in batch deletion: {e}", exc_info=True)
+            return False
+
