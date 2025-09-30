@@ -39,8 +39,10 @@ class SubmissionService:
 
             if not isinstance(model_response, dict):
                 logger.error("Error model_response is not dict")
-                return {}
+                return ("", {})
             
+
+            rule_used = model_response.get("rule_used", "")
             
             # save into s3
             new_response_file_id = str(uuid.uuid4())
@@ -57,7 +59,8 @@ class SubmissionService:
                     "tenant_id": tenant_id,
                     "case_id": new_case_id,
                     "s3_key": response_file_key,
-                    "status": model_response.get("decision", "unknown")
+                    "status": model_response.get("decision", "unknown"),
+                    "rule_used": rule_used
                 }
             )
 
@@ -78,18 +81,37 @@ class SubmissionService:
                 return ("", {})
 
             if model_response.get("decision"):
-                await self.sp_service.update(
+                case_update_result = await self.sp_service.update(
                     table_name="cases",
                     id=new_case_id,
                     object={"status": model_response["decision"]}
                 )
+                if not case_update_result:
+                    logger.warning("Failed to update case status, but continuing")
+                
                 
             return (new_case_id, model_response)
         
         except Exception as e:
             logger.error("Error submit_new_case")
+
+            if 'new_case_id' in locals() and new_case_id:
+                await self._update_case_to_failed(new_case_id)
+            
             return ("", {})
     
+
+    async def _update_case_to_failed(self, case_id: str):
+        """Helper method to update case status to failed."""
+        try:
+            await self.sp_service.update(
+                table_name="cases",
+                id=case_id,
+                object={"status": "failed"}
+            )
+        except Exception as e:
+            logger.error(f"Failed to update case {case_id} to failed status: {e}")
+
 
     async def submit_with_chosen_files(
         self,
@@ -126,6 +148,10 @@ class SubmissionService:
                 )
                 return {"error": "Invalid model response"}
 
+            # Extract rule_used from model response
+            rule_used = model_response.get("rule_used", "")
+
+
             # Save into S3
             new_response_file_id = str(uuid.uuid4())
             response_file_key = await self.s3_service.save_response_json(
@@ -142,7 +168,7 @@ class SubmissionService:
                 )
                 return {}
             
-            # Save into responses table with status
+            # Save into responses table with status AND rule_used
             response_insert_result = await self.sp_service.insert_one(
                 table_name="responses",
                 object={
@@ -150,7 +176,8 @@ class SubmissionService:
                     "tenant_id": tenant_id,
                     "case_id": case_id,
                     "s3_key": response_file_key,
-                    "status": model_response["decision"]  # Added status field
+                    "status": model_response["decision"],
+                    "rule_used": rule_used  
                 }
             )
 
@@ -176,7 +203,7 @@ class SubmissionService:
                 logger.error("Failed to insert response input files")
                 # Don't fail the whole operation for this
 
-            #  Update case status to final decision
+            # Update case status to final decision
             case_status_update = await self.sp_service.update(
                 table_name="cases",
                 id=case_id,
@@ -187,7 +214,7 @@ class SubmissionService:
                 logger.error("Failed to update case status to final decision")
                 # Don't fail the whole operation, but log it
 
-            logger.info(f"Successfully processed case {case_id} with decision: {model_response['decision']}")
+            logger.info(f"Successfully processed case {case_id} with decision: {model_response['decision']}, rules: {rules}")
             return model_response
 
         except Exception as e:
