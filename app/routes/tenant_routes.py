@@ -19,16 +19,16 @@ def create_tenant_routes() -> APIRouter:
     async def create_new_tenant(request: TenantCreationRequest):
         """Create a new tenant."""
         try:
-            res = await tenant_controller.create_new_tenant(name=request.tenant_name)
+            new_id = await tenant_controller.create_new_tenant(name=request.tenant_name)
             
-            if not res:
+            if not new_id:
                 return JSONResponse(
                     {"success": False, "error": "Failed to create tenant"}, 
                     status_code=500
                 )
 
             return JSONResponse(
-                {"success": True, "message": "Tenant created successfully"}, 
+                {"success": True, "new_id": new_id, "message": "Tenant created successfully"}, 
                 status_code=201
             )
             
