@@ -9,7 +9,7 @@ class TenantService():
         self.sp_service = SupabaseService()
         self.table_name = "tenants"
 
-    async def insert_new_tenant(self, name: str) -> bool:
+    async def insert_new_tenant(self, name: str) -> str:
         try:
             insert_res = await self.sp_service.insert(
                 table_name=self.table_name,
@@ -20,14 +20,14 @@ class TenantService():
 
             if not insert_res: 
                 logger.warning("Failed to insert tenant with name: %s", name)
-                return False
+                return ""
 
             logger.info("Successfully created tenant with name: %s", name)
-            return True
+            return insert_res.get("id", "")
 
         except Exception as e:
             logger.error("Tenant Service Error - insert_new_tenant for name: %s - %s", name, str(e), exc_info=True)
-            return False
+            return ""
         
     async def get_all_tenants(self) -> List[Dict[str, Any]]:
         try:
@@ -53,7 +53,7 @@ class TenantService():
             res = await self.sp_service.get_row_by_id(
                 id=id,
                 table_name=self.table_name,
-                columns="name"
+                columns="id, name"
             )
 
             if not res:

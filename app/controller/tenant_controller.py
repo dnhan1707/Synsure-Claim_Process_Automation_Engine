@@ -8,14 +8,14 @@ class TenantController():
     def __init__(self):
         self.tenant_service = TenantService()
 
-    async def create_new_tenant(self, name: str) -> bool:
+    async def create_new_tenant(self, name: str) -> str:
         try:
-            res = await self.tenant_service.insert_new_tenant(name)
-            return res
+            new_id = await self.tenant_service.insert_new_tenant(name)
+            return new_id
 
         except Exception as e:
             logger.error("Tenant Controller Error - create_new_tenant for name: %s - %s", name, str(e), exc_info=True)
-            return False
+            return ""
 
     async def get_all_tenants(self) -> List[Dict[str, Any]]:
         try:
