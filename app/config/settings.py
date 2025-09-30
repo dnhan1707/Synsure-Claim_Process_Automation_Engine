@@ -66,6 +66,7 @@ def get_prompt(details: str):
             - "confidence": 50
             - "riskScore": "HIGH"
             - "flags": ["MANUAL_REVIEW_REQUIRED"]
+            - "rule_used": ["RULE_MISSING_DATA"]
         - Do not include any markdown formatting or code blocks.
         - Ensure all strings are properly quoted.
         - Use exact flag names from the list below.
@@ -89,8 +90,13 @@ def get_prompt(details: str):
         "reasoning": "[2-3 sentence explanation of your decision, including key factors that influenced the determination]",
         "confidence": [number between 0-100 representing confidence in decision],
         "riskScore": "[LOW|MEDIUM|HIGH]",
-        "flags": ["FLAG1", "FLAG2", "FLAG3"]
+        "flags": ["FLAG1", "FLAG2", "FLAG3"],
+        "rule_used": "[Cite the actual insurance laws, regulations, statutes, or legal standards that apply to this decision with '#' seperated]"
         }}
+        **RULE_USED INSTRUCTIONS:**
+        In the "rule_used" field, cite the ACTUAL insurance laws, regulations, legal statutes, or industry standards that support your decision.
+        Reference the specific legal authority, statute, regulation, or established insurance law principle that justifies your decision. If multiple laws apply, list the most relevant ones.
+
 
         **DECISION CRITERIA:**
         - APPROVED: Clear legitimate claim with adequate documentation and low fraud risk
