@@ -215,7 +215,6 @@ class SubmissionService:
                 logger.error("Failed to update case status to final decision")
                 # Don't fail the whole operation, but log it
 
-            logger.info(f"Successfully processed case {case_id} with decision: {model_response['decision']}, rules: {rules}")
             return model_response
 
         except Exception as e:
