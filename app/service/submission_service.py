@@ -22,6 +22,7 @@ class SubmissionService:
         self,
         tenant_id: str, 
         case_name: str, 
+        case_type: str,
         files: list[UploadFile]    
     ) -> tuple: # (new_case_id, model_response)
         try:
@@ -30,7 +31,7 @@ class SubmissionService:
                 content = await file.read()
                 file_contents.append({"filename": file.filename, "content": content})
                 
-            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, case_name, files, status="running")
+            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, case_name, case_type, files, status="running")
 
             model_service = ModelService()
             model_response = await model_service.generate_response_v2(

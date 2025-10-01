@@ -71,12 +71,13 @@ def create_case_routes_v2() -> APIRouter:
     async def create_new_case(
         tenant_id: str = Form(..., description="Tenant ID"),
         case_name: str = Form(..., description="Case name"),
+        case_type: str = Form(..., description="Case type"),
         files: Optional[List[UploadFile]] = File(None, description="Optional files to upload")
     ):
         """Create a new case with optional file uploads."""
         try:
             new_case_id, saved_files_id = await case_service.create_new_case(
-                tenant_id, case_name, files, status="open"
+                tenant_id, case_name, case_type, files, status="open"
             )
 
             if not new_case_id:
