@@ -33,7 +33,7 @@ def create_application() -> FastAPI:
         license_info={
             "name": "MIT License",
         },
-        # ✅ Custom tag ordering
+        # Custom tag ordering
         tags_metadata=[
             {
                 "name": "Tenants",
@@ -79,7 +79,7 @@ def create_application() -> FastAPI:
             allow_headers=["Authorization", "Content-Type", "X-Request-ID", "x-api-key", "*"],  
         )
 
-    # ✅ Include routers in logical order
+    # Include routers in logical order
     app.include_router(create_tenant_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_claim_manager_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_case_routes_v2(), dependencies=[Depends(require_api_key)])

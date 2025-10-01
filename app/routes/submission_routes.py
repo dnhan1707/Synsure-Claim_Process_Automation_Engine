@@ -19,12 +19,13 @@ def create_submission_routes2() -> APIRouter:
     async def submit_new_case(
         tenant_id: str = Form(..., description="Tenant ID"),
         case_name: str = Form(..., description="Case name"),
+        case_type: str = Form(..., description="Case type"),
         files: list[UploadFile] = File(..., description="Files to upload"),
     ):
         """Create a new case and run with uploaded files."""
         try:
             new_case_id, model_response = await submission_service.submit_new_case(
-                tenant_id, case_name, files
+                tenant_id, case_name, case_type, files
             )
 
             if not new_case_id or not model_response:
