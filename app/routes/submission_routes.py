@@ -15,6 +15,32 @@ def create_submission_routes2() -> APIRouter:
         tags=["AI Processing"]    
     )
 
+    @router.post("/start", response_model=SubmissionResponse)
+    async def submit_with_chosen_files(request: SubmitFilesRequest):
+        """Run processing with chosen files from an existing case."""
+        try:
+            model_response = await submission_service.submit_with_chosen_files(
+                request.tenant_id, request.case_id, request.chosen_files
+            )
+            
+            if not model_response or model_response == {}:
+                return JSONResponse(
+                    {"success": False, "error": "No content generated", "result": {}}, 
+                    status_code=500
+                )
+                
+            return JSONResponse(
+                {"success": True, "result": model_response}, 
+                status_code=200
+            ) 
+
+        except Exception as e:
+            logger.error(f"Error in submit_with_chosen_files: {e}", exc_info=True)
+            return JSONResponse(
+                {"success": False, "error": str(e), "result": {}}, 
+                status_code=500
+            )
+
     @router.post("/newcase", response_model=CaseResponse)
     async def submit_new_case(
         tenant_id: str = Form(..., description="Tenant ID"),
@@ -43,32 +69,6 @@ def create_submission_routes2() -> APIRouter:
             logger.error(f"Error in submit_new_case: {e}", exc_info=True)
             return JSONResponse(
                 {"success": False, "error": str(e), "new_case_id": "", "result": {}}, 
-                status_code=500
-            )
-
-    @router.post("/start", response_model=SubmissionResponse)
-    async def submit_with_chosen_files(request: SubmitFilesRequest):
-        """Run processing with chosen files from an existing case."""
-        try:
-            model_response = await submission_service.submit_with_chosen_files(
-                request.tenant_id, request.case_id, request.chosen_files
-            )
-            
-            if not model_response or model_response == {}:
-                return JSONResponse(
-                    {"success": False, "error": "No content generated", "result": {}}, 
-                    status_code=500
-                )
-                
-            return JSONResponse(
-                {"success": True, "result": model_response}, 
-                status_code=200
-            ) 
-
-        except Exception as e:
-            logger.error(f"Error in submit_with_chosen_files: {e}", exc_info=True)
-            return JSONResponse(
-                {"success": False, "error": str(e), "result": {}}, 
                 status_code=500
             )
     

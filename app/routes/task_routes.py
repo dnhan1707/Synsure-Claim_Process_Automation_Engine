@@ -12,6 +12,7 @@ def create_task_router() -> APIRouter:
         tags=["Tasks"]
     )
 
+    # More specific routes should come first to avoid path conflicts
     @router.get("/status/{tenant_id}")
     async def get_tasks_status(
         tenant_id: str = Path(..., description="Tenant ID"),
@@ -50,50 +51,4 @@ def create_task_router() -> APIRouter:
                 {"error": f"Internal server error: {str(e)}"}, 
                 status_code=500
             )
-    
-    # @router.post("/debug/process-task", tags=["Debug"])
-    # async def debug_process_task(request: ProcessTaskRequest):
-    #     """Debug endpoint to manually process a single task."""
-    #     try:
-    #         task_service = TaskService()
-    #         result = await task_service.process_task(request.task_id)
-            
-    #         return JSONResponse(
-    #             {"task_id": request.task_id, "result": result}, 
-    #             status_code=200
-    #         )
-            
-    #     except Exception as e:
-    #         logger.error(f"Error in debug_process_task: {e}", exc_info=True)
-    #         return JSONResponse(
-    #             {"error": str(e), "task_id": request.task_id}, 
-    #             status_code=500
-    #         )
-
-    # @router.get("/debug/task/{task_id}", tags=["Debug"])
-    # async def debug_get_task(
-    #     task_id: str = Path(..., description="Task ID to retrieve")
-    # ):
-    #     """Debug endpoint to get task details."""
-    #     try:
-    #         task_service = TaskService()
-    #         task = await task_service.sp_service.get_by_id("task", "*", task_id)
-            
-    #         if not task:
-    #             raise HTTPException(
-    #                 status_code=404, 
-    #                 detail=f"Task not found: {task_id}"
-    #             )
-            
-    #         return JSONResponse({"task": task}, status_code=200)
-            
-    #     except HTTPException:
-    #         raise
-    #     except Exception as e:
-    #         logger.error(f"Error in debug_get_task: {e}", exc_info=True)
-    #         return JSONResponse(
-    #             {"error": str(e)}, 
-    #             status_code=500
-    #         )
-    
     return router

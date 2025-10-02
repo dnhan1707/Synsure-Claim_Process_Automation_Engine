@@ -17,6 +17,7 @@ def create_claim_manager_routes() -> APIRouter:
         tags=["Claims"]    
     )
     
+    # Claims CRUD operations
     @router.post("/", response_model=StandardResponse)
     async def create_new_claim(
         tenant_id: str = Form(..., description="Tenant ID"),
@@ -49,6 +50,30 @@ def create_claim_manager_routes() -> APIRouter:
                 status_code=500
             )
 
+    @router.get("/", response_model=ClaimsListResponse)
+    async def get_all_claims():
+        """Get all claims in the system."""
+        try:
+            res = await claim_manager_controller.get_all_claim()
+            
+            if not res:
+                return JSONResponse(
+                    {"success": False, "result": [], "error": "No claims found"}, 
+                    status_code=404
+                )
+
+            return JSONResponse(
+                {"success": True, "result": res}, 
+                status_code=200
+            )
+
+        except Exception as e:
+            logger.error(f"Error in get_all_claims: {e}", exc_info=True)
+            return JSONResponse(
+                {"success": False, "result": [], "error": "Internal server error"}, 
+                status_code=500
+            )
+
     @router.get("/{claim_id}", response_model=ClaimResponse)
     async def get_claim_by_id(
         claim_id: str = Path(..., description="Claim ID to retrieve")
@@ -72,30 +97,6 @@ def create_claim_manager_routes() -> APIRouter:
             logger.error(f"Error in get_claim_by_id: {e}", exc_info=True)
             return JSONResponse(
                 {"success": False, "result": {}, "error": "Internal server error"}, 
-                status_code=500
-            )
-
-    @router.get("/", response_model=ClaimsListResponse)
-    async def get_all_claims():
-        """Get all claims in the system."""
-        try:
-            res = await claim_manager_controller.get_all_claim()
-            
-            if not res:
-                return JSONResponse(
-                    {"success": False, "result": [], "error": "No claims found"}, 
-                    status_code=404
-                )
-
-            return JSONResponse(
-                {"success": True, "result": res}, 
-                status_code=200
-            )
-
-        except Exception as e:
-            logger.error(f"Error in get_all_claims: {e}", exc_info=True)
-            return JSONResponse(
-                {"success": False, "result": [], "error": "Internal server error"}, 
                 status_code=500
             )
 
@@ -126,6 +127,33 @@ def create_claim_manager_routes() -> APIRouter:
                 status_code=500
             )
 
+    @router.delete("/{case_id}", response_model=StandardResponse)
+    async def remove_case(
+        case_id: str = Path(..., description="Case ID to remove")
+    ):
+        """Remove a case and all its associated files."""
+        try:
+            res = await claim_manager_controller.remove_case(case_id)
+            
+            if not res:
+                return JSONResponse(
+                    {"success": False, "error": "Failed to remove case"}, 
+                    status_code=500
+                )
+
+            return JSONResponse(
+                {"success": True, "message": "Case successfully deleted"}, 
+                status_code=200
+            )
+
+        except Exception as e:
+            logger.error(f"Error in remove_case: {e}", exc_info=True)
+            return JSONResponse(
+                {"success": False, "error": "Internal server error"}, 
+                status_code=500
+            )
+
+    # File operations on existing cases
     @router.post("/{tenant_id}/{case_id}", response_model=StandardResponse)
     async def upload_files_to_existing_case(
         tenant_id: str = Path(..., description="Tenant ID"),
@@ -212,32 +240,6 @@ def create_claim_manager_routes() -> APIRouter:
 
         except Exception as e:
             logger.error(f"Error in remove_files: {e}", exc_info=True)
-            return JSONResponse(
-                {"success": False, "error": "Internal server error"}, 
-                status_code=500
-            )
-
-    @router.delete("/{case_id}", response_model=StandardResponse)
-    async def remove_case(
-        case_id: str = Path(..., description="Case ID to remove")
-    ):
-        """Remove a case and all its associated files."""
-        try:
-            res = await claim_manager_controller.remove_case(case_id)
-            
-            if not res:
-                return JSONResponse(
-                    {"success": False, "error": "Failed to remove case"}, 
-                    status_code=500
-                )
-
-            return JSONResponse(
-                {"success": True, "message": "Case successfully deleted"}, 
-                status_code=200
-            )
-
-        except Exception as e:
-            logger.error(f"Error in remove_case: {e}", exc_info=True)
             return JSONResponse(
                 {"success": False, "error": "Internal server error"}, 
                 status_code=500
