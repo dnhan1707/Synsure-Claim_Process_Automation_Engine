@@ -336,7 +336,7 @@ class SupabaseServiceV2():
                 return response.data    
         
         except Exception as e:
-            logger.error(f"Error get_case {e}")
+            logger.error(f"Error get_s3_keys {e}")
             return None
     
     async def get_by_id(self, table_name: str, columns: str, id: str):
@@ -355,7 +355,7 @@ class SupabaseServiceV2():
             return None
         
         except Exception as e:
-            logger.error(f"Error get_case {e}")
+            logger.error(f"Error get_by_id {e}")
             return None
 
     
@@ -616,3 +616,43 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error delete_by_response_id: {e}")
             return []
+        
+
+    async def get_by_tenant_id(self, table_name: str, tenant_id: str, column: str):
+        try:
+            response = (
+                self.sp_client.table(table_name)
+                .select(column)
+                .eq("tenant_id", tenant_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if response.data:
+                return response.data
+            
+            return []
+
+        except Exception as e:
+            logger.error(f"Error get_by_tenant_id: {e}")
+            return []
+        
+
+    async def get_most_case_type_general(self, column: str):
+        try:
+            response = (
+                self.sp_client.table("cases")
+                .select(column)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if response.data:
+                return response.data
+            
+            return []
+
+        except Exception as e:
+            logger.error(f"Error get_by_tenant_id: {e}")
+            return []
+        

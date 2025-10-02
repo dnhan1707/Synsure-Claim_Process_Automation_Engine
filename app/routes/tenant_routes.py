@@ -15,6 +15,30 @@ def create_tenant_routes() -> APIRouter:
         tags=["Tenants"],
     )
     
+    @router.get("/", response_model=TenantsListResponse)
+    async def get_all_tenants():
+        """Get all tenants in the system."""
+        try:
+            res = await tenant_controller.get_all_tenants()
+            
+            if not res:
+                return JSONResponse(
+                    {"success": False, "result": [], "error": "No tenants found"}, 
+                    status_code=404
+                )
+
+            return JSONResponse(
+                {"success": True, "result": res}, 
+                status_code=200
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in get_all_tenants: {e}", exc_info=True)
+            return JSONResponse(
+                {"success": False, "result": [], "error": "Internal server error"}, 
+                status_code=500
+            )
+    
     @router.post("/", response_model=StandardResponse)
     async def create_new_tenant(request: TenantCreationRequest):
         """Create a new tenant."""
@@ -39,30 +63,6 @@ def create_tenant_routes() -> APIRouter:
                 status_code=500
             )
 
-    @router.get("/", response_model=TenantsListResponse)
-    async def get_all_tenants():
-        """Get all tenants in the system."""
-        try:
-            res = await tenant_controller.get_all_tenants()
-            
-            if not res:
-                return JSONResponse(
-                    {"success": False, "result": [], "error": "No tenants found"}, 
-                    status_code=404
-                )
-
-            return JSONResponse(
-                {"success": True, "result": res}, 
-                status_code=200
-            )
-            
-        except Exception as e:
-            logger.error(f"Error in get_all_tenants: {e}", exc_info=True)
-            return JSONResponse(
-                {"success": False, "result": [], "error": "Internal server error"}, 
-                status_code=500
-            )
-
     @router.get("/{tenant_id}", response_model=TenantResponse)
     async def get_tenant(
         tenant_id: str = Path(..., description="Tenant ID to retrieve")
@@ -82,7 +82,7 @@ def create_tenant_routes() -> APIRouter:
                 status_code=200
             )
             
-        except Exception as e:
+        except Exception in e:
             logger.error(f"Error in get_tenant: {e}", exc_info=True)
             return JSONResponse(
                 {"success": False, "result": {}, "error": "Internal server error"}, 
