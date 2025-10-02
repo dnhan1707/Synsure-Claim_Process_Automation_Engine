@@ -18,7 +18,7 @@ class CaseService:
             res = await self.sp_service.get_all_cases_by_tenant(
                 table_name="cases",
                 tenant_id=tenant_id,
-                columns="id, case_name, created_at, updated_at"
+                columns="id, case_name, short_des, created_at, updated_at"
             )
 
             if not res:
@@ -35,7 +35,7 @@ class CaseService:
         try:
             general_data = await self.sp_service.get_case(
                 table_name="cases",
-                columns="case_name, created_at, updated_at",
+                columns="case_name, short_des, created_at, updated_at",
                 tenant_id=tenant_id,
                 case_id=case_id
             )
@@ -70,7 +70,7 @@ class CaseService:
             return None
 
 
-    async def create_new_case(self, tenant_id: str, case_name: str, case_type: str, files: list[UploadFile], status: str):
+    async def create_new_case(self, tenant_id: str, case_name: str, case_type: str, files: list[UploadFile], status: str, short_des: str = "unknown"):
         try:
             # save in table cases
             cases_table_response = await self.sp_service.insert_one(
@@ -79,7 +79,8 @@ class CaseService:
                     "tenant_id": tenant_id,
                     "case_name": case_name,
                     "status": status,
-                    "case_type": case_type
+                    "case_type": case_type,
+                    "short_des": short_des 
                 }
             )
             new_case_id = cases_table_response["id"]

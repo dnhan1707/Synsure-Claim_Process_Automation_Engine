@@ -31,7 +31,6 @@ class SubmissionService:
                 content = await file.read()
                 file_contents.append({"filename": file.filename, "content": content})
                 
-            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, case_name, case_type, files, status="running")
 
             model_service = ModelService()
             model_response = await model_service.generate_response_v2(
@@ -42,6 +41,10 @@ class SubmissionService:
                 logger.error("Error model_response is not dict")
                 return ("", {})
             
+            short_des = model_response.get("short_des", "")
+
+            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, short_des, case_name, case_type, files, status="running")
+
 
             rule_used = model_response.get("rule_used", "")
             
@@ -205,11 +208,26 @@ class SubmissionService:
                 # Don't fail the whole operation for this
 
             # Update case status to final decision
-            case_status_update = await self.sp_service.update(
-                table_name="cases",
-                id=case_id,
-                object={"status": model_response["decision"]}
-            )
+            short_des = model_response.get("short_des", "")
+
+            # Skip updating short_des only if it's truly empty or None
+            if not short_des or short_des.strip() == "":
+                # Only update status
+                case_status_update = await self.sp_service.update(
+                    table_name="cases",
+                    id=case_id,
+                    object={"status": model_response["decision"]}
+                )
+            else:
+                # Update both status and short_des (including "unknown")
+                case_status_update = await self.sp_service.update(
+                    table_name="cases",
+                    id=case_id,
+                    object={
+                        "status": model_response["decision"],
+                        "short_des": short_des
+                    }
+                )
 
             if not case_status_update:
                 logger.error("Failed to update case status to final decision")
