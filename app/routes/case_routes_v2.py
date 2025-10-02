@@ -77,7 +77,7 @@ def create_case_routes_v2() -> APIRouter:
         """Create a new case with optional file uploads."""
         try:
             new_case_id, saved_files_id = await case_service.create_new_case(
-                tenant_id, case_name, case_type, files, status="open"
+                tenant_id, case_name, case_type, files, status="open", short_des=""
             )
 
             if not new_case_id:

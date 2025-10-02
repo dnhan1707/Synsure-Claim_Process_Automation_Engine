@@ -86,6 +86,7 @@ def get_prompt(details: str):
 
         **OUTPUT FORMAT - RESPOND WITH EXACTLY THIS JSON STRUCTURE:**
         {{
+        "short_des": "[a few words describe the case]",
         "decision": "[APPROVED|REJECTED|REVIEW_REQUIRED]",
         "reasoning": "[2-3 sentence explanation of your decision, including key factors that influenced the determination]",
         "confidence": [number between 0-100 representing confidence in decision],
