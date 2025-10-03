@@ -25,82 +25,177 @@ class SubmissionService:
         case_type: str,
         files: list[UploadFile]    
     ) -> tuple: # (new_case_id, model_response)
+        new_case_id = ""  
         try:
-            file_contents = []
-            for file in files:
-                content = await file.read()
-                file_contents.append({"filename": file.filename, "content": content})
-                
+            logger.info(f"Starting submit_new_case for tenant {tenant_id}, case_name: {case_name}")
+            
+            if not files or len(files) == 0:
+                logger.error("No files provided")
+                return ("", {})
+            
+            if not tenant_id or not case_name or not case_type:
+                logger.error(f"Missing required fields: tenant_id={tenant_id}, case_name={case_name}, case_type={case_type}")
+                return ("", {})
 
+            # Process files
+            file_contents = []
+            for i, file in enumerate(files):
+                try:
+                    content = await file.read()
+                    if not content:
+                        logger.warning(f"File {i} ({file.filename}) is empty")
+                        continue
+                    file_contents.append({"filename": file.filename, "content": content})
+                    logger.info(f"Processed file {i}: {file.filename} ({len(content)} bytes)")
+                except Exception as file_error:
+                    logger.error(f"Error reading file {i} ({file.filename}): {file_error}")
+                    return ("", {})
+
+            if not file_contents:
+                logger.error("No valid file contents after processing")
+                return ("", {})
+
+            logger.info("Generating AI model response...")
             model_service = ModelService()
-            model_response = await model_service.generate_response_v2(
-                file_contents=file_contents
-            )
+            model_response = await model_service.generate_response_v2(file_contents=file_contents)
 
             if not isinstance(model_response, dict):
-                logger.error("Error model_response is not dict")
+                logger.error(f"Invalid model_response type: {type(model_response)}, value: {model_response}")
                 return ("", {})
+            
+            logger.info(f"AI response generated: {model_response}")
             
             short_des = model_response.get("short_des", "")
-
-            new_case_id, saved_files_id = await self.case_service.create_new_case(tenant_id, short_des, case_name, case_type, files, status="running")
-
-
-            rule_used = model_response.get("rule_used", "")
             
-            # save into s3
-            new_response_file_id = str(uuid.uuid4())
-            response_file_key = await self.s3_service.save_response_json(tenant_id, new_case_id, new_response_file_id, model_response)
-            if not response_file_key:
-                logger.error("Error save_response_json in submit_new_case")
-                return ("", {})
-
-            # save into responses table
-            response_row = await self.sp_service.insert_one(
-                table_name="responses",
-                object={
-                    "id": new_response_file_id,
-                    "tenant_id": tenant_id,
-                    "case_id": new_case_id,
-                    "s3_key": response_file_key,
-                    "status": model_response.get("decision", "unknown"),
-                    "rule_used": rule_used
-                }
-            )
-
-            # save into response_input_files table
-            rows = []
-            for fid in saved_files_id:
-                rows.append({
-                    "file_id": fid,
-                    "response_id": new_response_file_id
-                })
-            
-            insert_bulk_response = await self.sp_service.insert_bulk(
-                table_name="response_input_files",
-                list_object=rows
-            )
-            if not insert_bulk_response:
-                logger.error("Error insert_bulk in submit_new_case")
-                return ("", {})
-
-            if model_response.get("decision"):
-                case_update_result = await self.sp_service.update(
-                    table_name="cases",
-                    id=new_case_id,
-                    object={"status": model_response["decision"]}
+            logger.info("Creating new case...")
+            try:
+                new_case_id, saved_files_id = await self.case_service.create_new_case(
+                    tenant_id=tenant_id,
+                    short_des=short_des, 
+                    case_name=case_name,
+                    case_type=case_type,
+                    files=files,
+                    status="running"
                 )
-                if not case_update_result:
-                    logger.warning("Failed to update case status, but continuing")
                 
+                if not new_case_id:
+                    logger.error("create_new_case returned empty case_id")
+                    return ("", {})
+                    
+                if not saved_files_id:
+                    logger.error("create_new_case returned empty saved_files_id")
+                    await self._update_case_to_failed(new_case_id)
+                    return ("", {})
+                    
+                logger.info(f"Case created successfully: {new_case_id}, files: {saved_files_id}")
                 
-            return (new_case_id, model_response)
-        
-        except Exception as e:
-            logger.error("Error submit_new_case")
+            except Exception as case_error:
+                logger.error(f"Error creating case: {case_error}", exc_info=True)
+                return ("", {})
 
-            if 'new_case_id' in locals() and new_case_id:
+            # Extract rule_used
+            rule_used = model_response.get("rule_used", "")
+            if isinstance(rule_used, list):
+                rule_used = " ".join(rule_used)
+            
+            # Save response to S3
+            logger.info("Saving response to S3...")
+            new_response_file_id = str(uuid.uuid4())
+            try:
+                response_file_key = await self.s3_service.save_response_json(
+                    tenant_id, new_case_id, new_response_file_id, model_response
+                )
+                if not response_file_key:
+                    logger.error("S3 save_response_json returned empty key")
+                    await self._update_case_to_failed(new_case_id)
+                    return ("", {})
+                logger.info(f"Response saved to S3: {response_file_key}")
+                
+            except Exception as s3_error:
+                logger.error(f"Error saving to S3: {s3_error}", exc_info=True)
                 await self._update_case_to_failed(new_case_id)
+                return ("", {})
+
+            # Save to responses table
+            logger.info("Saving response to database...")
+            try:
+                response_row = await self.sp_service.insert_one(
+                    table_name="responses",
+                    object={
+                        "id": new_response_file_id,
+                        "tenant_id": tenant_id,
+                        "case_id": new_case_id,
+                        "s3_key": response_file_key,
+                        "status": model_response.get("decision", "unknown"),
+                        "rule_used": rule_used
+                    }
+                )
+                
+                if not response_row:
+                    logger.error("Failed to insert response record")
+                    await self._update_case_to_failed(new_case_id)
+                    return ("", {})
+                logger.info(f"Response record created: {response_row}")
+                
+            except Exception as db_error:
+                logger.error(f"Error saving response to database: {db_error}", exc_info=True)
+                await self._update_case_to_failed(new_case_id)
+                return ("", {})
+
+            # Save response_input_files relationship
+            logger.info("Creating response-file relationships...")
+            try:
+                rows = []
+                for fid in saved_files_id:
+                    rows.append({
+                        "file_id": fid,
+                        "response_id": new_response_file_id
+                    })
+                
+                if rows:
+                    insert_bulk_response = await self.sp_service.insert_bulk(
+                        table_name="response_input_files",
+                        list_object=rows
+                    )
+                    if not insert_bulk_response:
+                        logger.error("Error inserting response_input_files relationships")
+                        # Don't fail the whole operation for this
+                    else:
+                        logger.info(f"Created {len(rows)} response-file relationships")
+                
+            except Exception as rel_error:
+                logger.error(f"Error creating response-file relationships: {rel_error}", exc_info=True)
+                # Don't fail the whole operation for this
+
+            # Update case status to final decision
+            logger.info("Updating final case status...")
+            try:
+                if model_response.get("decision"):
+                    case_update_result = await self.sp_service.update(
+                        table_name="cases",
+                        id=new_case_id,
+                        object={"status": model_response["decision"]}
+                    )
+                    if not case_update_result:
+                        logger.warning("Failed to update case status, but continuing")
+                    else:
+                        logger.info(f"Case status updated to: {model_response['decision']}")
+                
+            except Exception as update_error:
+                logger.error(f"Error updating case status: {update_error}", exc_info=True)
+                # Don't fail for this
+                    
+            logger.info(f"submit_new_case completed successfully for case {new_case_id}")
+            return (new_case_id, model_response)
+            
+        except Exception as e:
+            logger.error(f"Error in submit_new_case: {e}", exc_info=True) 
+
+            if new_case_id: 
+                try:
+                    await self._update_case_to_failed(new_case_id)
+                except Exception as update_error:
+                    logger.error(f"Failed to update case to failed status: {update_error}")
             
             return ("", {})
     

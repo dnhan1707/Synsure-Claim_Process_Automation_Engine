@@ -117,6 +117,7 @@ class CaseService:
 
 
         except Exception as e:
+            logger.error("Error create new case")
             return ""
 
     async def submit_one(
