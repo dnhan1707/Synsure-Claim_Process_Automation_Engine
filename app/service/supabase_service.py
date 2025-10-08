@@ -545,14 +545,24 @@ class SupabaseServiceV2():
         try:
             if soft_delete:
                 # Soft delete: Update deleted_at column with current timestamp
-                response = (
-                    self.sp_client.table(table_name)
-                    .update({"deleted_at": "now()"})
-                    .eq("tenant_id", tenant_id)
-                    .eq("case_id", case_id)
-                    .is_("deleted_at", "null")  
-                    .execute()
-                )
+                if table_name == "cases":
+                    response = (
+                        self.sp_client.table(table_name)
+                        .update({"deleted_at": "now()"})
+                        .eq("tenant_id", tenant_id)
+                        .eq("id", case_id)
+                        .is_("deleted_at", "null")  
+                        .execute()
+                    )
+                else:
+                    response = (
+                        self.sp_client.table(table_name)
+                        .update({"deleted_at": "now()"})
+                        .eq("tenant_id", tenant_id)
+                        .eq("case_id", case_id)
+                        .is_("deleted_at", "null")  
+                        .execute()
+                    )
                 
                 if response.data:
                     deleted_ids = [record["id"] for record in response.data]
@@ -563,13 +573,24 @@ class SupabaseServiceV2():
                     return []
             else:
                 # Hard delete: Permanently remove records
-                response = (
-                    self.sp_client.table(table_name)
-                    .delete()
-                    .eq("tenant_id", tenant_id)
-                    .eq("case_id", case_id)
-                    .execute()
-                )
+
+                if table_name == "cases":
+                    response = (
+                        self.sp_client.table(table_name)
+                        .delete()
+                        .eq("tenant_id", tenant_id)
+                        .eq("id", case_id)
+                        .is_("deleted_at", "null")  
+                        .execute()
+                    )
+                else:
+                    response = (
+                        self.sp_client.table(table_name)
+                        .delete()
+                        .eq("tenant_id", tenant_id)
+                        .eq("case_id", case_id)
+                        .execute()
+                    )
                 
                 if response.data:
                     deleted_ids = [record["id"] for record in response.data]
