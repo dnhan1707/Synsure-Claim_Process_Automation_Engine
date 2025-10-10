@@ -536,7 +536,28 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error updating task and case status: {e}")
             return False
-        
+    
+
+    async def update_new_case_processed_column(self, tenant_id: str, case_id: str, bool_val: bool):
+        try:
+            response = (
+                self.sp_client.table("cases")
+                .update({"new_case_processed": bool_val})
+                .eq("tenant_id", tenant_id)
+                .eq("id", case_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            else:
+                return False
+
+        except Exception as e:
+            logger.error(f"Error uupdate_new_case_processed_column: {e}")
+            return False
+
     
     async def delete_by_tenant_id_case_id(self, table_name: str, tenant_id: str, case_id: str, soft_delete: bool = True):
         """
@@ -676,4 +697,24 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error get_by_tenant_id: {e}")
             return []
+    
+
+    async def is_new_case_processed(self, tenant_id: str, case_id: str):
+        try:
+            response = (
+                self.sp_client.table("cases")
+                .select("new_case_processed")
+                .eq("tenant_id", tenant_id)
+                .eq("id", case_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if len(response.data) > 0 and response.data[0]:
+                return response.data[0].get("new_case_processed")
+            
+            return False
         
+        except Exception as e:
+            logger.error(f"Error is_new_case_processed")
+            return False

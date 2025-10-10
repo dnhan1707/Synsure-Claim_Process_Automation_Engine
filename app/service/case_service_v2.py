@@ -80,7 +80,8 @@ class CaseService:
                     "case_name": case_name,
                     "status": status,
                     "case_type": case_type,
-                    "short_des": short_des 
+                    "short_des": short_des,
+                    "new_case_processed": True
                 }
             )
             new_case_id = cases_table_response["id"]
@@ -120,38 +121,38 @@ class CaseService:
             logger.error("Error create new case")
             return ""
 
-    async def submit_one(
-        self,
-        tenant_id: str, 
-        case_id: Optional[str], 
-        case_name: str, 
-        files: list[UploadFile]    
-    ) -> tuple:
-        try:
-            if not case_id: # this is new case
-                file_contents = []
+    # async def submit_one(
+    #     self,
+    #     tenant_id: str, 
+    #     case_id: Optional[str], 
+    #     case_name: str, 
+    #     files: list[UploadFile]    
+    # ) -> tuple:
+    #     try:
+    #         if not case_id: # this is new case
+    #             file_contents = []
 
-                for file in files:
-                    content = await file.read()
-                    file_contents.append({"filename": file.filename, "content": content})
+    #             for file in files:
+    #                 content = await file.read()
+    #                 file_contents.append({"filename": file.filename, "content": content})
 
-                model_service = ModelService()
-                model_response = await model_service.generate_response_v2(
-                    file_contents=file_contents
-                )
+    #             model_service = ModelService()
+    #             model_response = await model_service.generate_response_v2(
+    #                 file_contents=file_contents
+    #             )
 
-                if not isinstance(model_response, dict):
-                    logger.error("Error model_response is not dict")
-                    return {}
+    #             if not isinstance(model_response, dict):
+    #                 logger.error("Error model_response is not dict")
+    #                 return {}
                 
-                new_case_id = await self.create_new_case(tenant_id, case_name, files)
+    #             new_case_id = await self.create_new_case(tenant_id, case_name, files)
 
-                return (new_case_id, model_response)
+    #             return (new_case_id, model_response)
 
 
-        except Exception as e:
-            logger.error("Error submit_one")
-            return ("", {})
+    #     except Exception as e:
+    #         logger.error("Error submit_one")
+    #         return ("", {})
 
 
     async def get_latest_response(self, tenant_id: str, case_id: str):
