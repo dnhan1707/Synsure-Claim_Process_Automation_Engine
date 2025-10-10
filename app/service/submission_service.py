@@ -219,6 +219,19 @@ class SubmissionService:
         chosen_files: list[str]  # list of file IDs
     ) -> dict:
         try:
+            # Check if the new_case_processed is true?
+            # if yes -> return the latest response and update it back to False
+            if await self.sp_service.is_new_case_processed(tenant_id=tenant_id, case_id=case_id):
+                if await self.sp_service.update_new_case_processed_column(tenant_id=tenant_id, case_id=case_id, bool_val=False):
+                    return await self.case_service.get_latest_response(tenant_id=tenant_id, case_id=case_id)
+                else:
+                    logger.error("Error update_new_case_processed_column")
+                    return {}
+            
+            # if no -> keep normal
+              
+
+
             read_data = await self.process_all_files_concurrently(chosen_files)
 
             if not read_data:
