@@ -61,12 +61,14 @@ def get_prompt(details: str):
 
         **IMPORTANT:**
         - If CLAIM DETAILS is empty or missing, respond ONLY with the JSON object below, using:
+            - "short_des": "Error"
             - "decision": "REVIEW_REQUIRED"
             - "reasoning": "No claim details or supporting documentation were provided for analysis. This case requires immediate human expert intervention to gather necessary data."
             - "confidence": 50
             - "riskScore": "HIGH"
             - "flags": ["MANUAL_REVIEW_REQUIRED"]
             - "rule_used": ["RULE_MISSING_DATA"]
+            - "rule_followed": ["false"]
         - Do not include any markdown formatting or code blocks.
         - Ensure all strings are properly quoted.
         - Use exact flag names from the list below.
@@ -78,21 +80,24 @@ def get_prompt(details: str):
 
         **ANALYSIS REQUIREMENTS:**
         Evaluate the claim based on:
-        1. Claim legitimacy and supporting documentation
-        2. Fraud indicators and red flags
-        3. Policy compliance and coverage validation
-        4. Claim amount reasonableness
-        5. Supporting evidence quality and consistency
+            1. Claim legitimacy and supporting documentation 
+            2. Fraud indicators and red flags Search for elements that appear fraudulent, for example, if certain aspects of the claim don’t align with others.If you fail to find fraud, inaccuracies, or cases of rule breaking, explain what you found. 
+            3. Policy compliance and coverage validation, see if their claim fits the rules of their specific policy. 
+            4. Claim amount reasonableness 
+            5. Supporting evidence quality and consistency 
+            6. Must have evidence supporting the claim 
+            7. If it is following the chubb insurance company’s policy, search and describe which elements it is following to ensure accuracy. 
 
         **OUTPUT FORMAT - RESPOND WITH EXACTLY THIS JSON STRUCTURE:**
         {{
         "short_des": "[a few words describe the case]",
         "decision": "[APPROVED|REJECTED|REVIEW_REQUIRED]",
-        "reasoning": "[2-3 sentence explanation of your decision, including key factors that influenced the determination]",
+        "reasoning": "[2-3 sentence explanation of your rule analysis, include rules and policies from insured insurance company (the insured insurance company is chubb insurance for this prompt), insurance laws, legal regulations, legal statutes, legal standards and any other key factors you used in your analysis]",
         "confidence": [number between 0-100 representing confidence in decision],
         "riskScore": "[LOW|MEDIUM|HIGH]",
         "flags": ["FLAG1", "FLAG2", "FLAG3"],
-        "rule_used": "[Cite the actual insurance laws, regulations, statutes, or legal standards that apply to this decision with '#' seperated]"
+        "rule_used": "[Cite the actual insurance laws, regulations, statutes, or legal standards that apply to this decision with '#' seperated]",
+        "rule_followed" : "[true or false depending on rule analysis if rule_followed is true, claim must follow all rules and as soon as claim breaks one rule, rule_followed must be false]" 
         }}
         **RULE_USED INSTRUCTIONS:**
         In the "rule_used" field, cite the ACTUAL insurance laws, regulations, legal statutes, or industry standards that support your decision.
