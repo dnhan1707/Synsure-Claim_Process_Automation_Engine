@@ -45,32 +45,6 @@ def create_case_routes_v2() -> APIRouter:
                 status_code=500
             )
 
-    @router.get("/analytics/most-type")
-    async def get_most_case_type_general():
-        try:
-            res = await case_service.get_most_case_type_general()
-            if not res or res == "":
-                return JSONResponse({"success": False, "error": "Error in get_most_case_type_general"}, status_code=404)
-
-            return JSONResponse({"success": True, "result": res}, status_code=200)
-
-        except Exception as e:
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-    @router.get("/analytics/most-type/{tenant_id}")
-    async def get_most_case_type_by_tenant(
-        tenant_id: str = Path(..., description="Tenant ID"),                                 
-    ):
-        try:
-            res = await case_service.get_most_case_type_by_tenant(tenant_id)
-            if not res or res == "":
-                return JSONResponse({"success": False, "error": "Error in get_most_case_type_by_tenant"}, status_code=404)
-
-            return JSONResponse({"success": True, "result": res}, status_code=200)
-
-        except Exception as e:
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
     @router.get("/latestresponse/{tenant_id}/{case_id}")
     async def get_latest_response(
         tenant_id: str = Path(..., description="Tenant ID"),
