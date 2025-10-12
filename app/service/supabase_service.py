@@ -680,7 +680,7 @@ class SupabaseServiceV2():
             return []
         
 
-    async def get_most_case_type_general(self, column: str):
+    async def get_from_cases_table(self, column: str):
         try:
             response = (
                 self.sp_client.table("cases")
@@ -697,6 +697,24 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error get_by_tenant_id: {e}")
             return []
+    
+    # async def get_distict_type_from_cases_table(self, column: str):
+    #     try:
+    #         response = (
+    #             self.sp_client.table("cases")
+    #             .select(column, distinct=True)
+    #             .is_("deleted_at", "null")
+    #             .execute()
+    #         )
+
+    #         if response.data:
+    #             return response.data
+            
+    #         return []
+
+    #     except Exception as e:
+    #         logger.error(f"Error get_distict_type_from_cases_table: {e}")
+    #         return []
     
 
     async def is_new_case_processed(self, tenant_id: str, case_id: str):

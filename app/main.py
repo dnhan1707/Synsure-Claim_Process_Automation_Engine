@@ -7,6 +7,7 @@ from app.routes.case_routes_v2 import create_case_routes_v2
 from app.routes.submission_routes import create_submission_routes2
 from app.routes.file_routes import create_file_routes_v2
 from app.routes.task_routes import create_task_router
+from app.routes.insight_routes import create_insight_route
 from app.config.dependencies import require_api_key
 from app.config.security import security_setting
 
@@ -63,6 +64,10 @@ def create_application() -> FastAPI:
                 "name": "Email",
                 "description": "Email notifications and communications",
             },
+            {                
+                "name": "Insight",
+                "description": "Provide meaningful metrics",
+            },
             {
                 "name": "Debug",
                 "description": "Development and debugging utilities",
@@ -86,6 +91,7 @@ def create_application() -> FastAPI:
     app.include_router(create_file_routes_v2(), dependencies=[Depends(require_api_key)])
     app.include_router(create_submission_routes2(), dependencies=[Depends(require_api_key)])
     app.include_router(create_task_router(), dependencies=[Depends(require_api_key)])
+    app.include_router(create_insight_route(), dependencies=[Depends(require_api_key)])
     app.include_router(create_email_route(), dependencies=[Depends(require_api_key)])
 
     return app
