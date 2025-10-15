@@ -715,6 +715,26 @@ class SupabaseServiceV2():
     #     except Exception as e:
     #         logger.error(f"Error get_distict_type_from_cases_table: {e}")
     #         return []
+
+    async def get_case_with_status(self, column: str, status: str):
+        try:
+            response = (
+                self.sp_client.table("cases")
+                .select(column)
+                .eq("status", status)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+
+            if len(response.data) > 0 and response.data[0]:
+                return response.data
+            
+            return []
+        
+        except Exception as e:
+            logger.error(f"Error get_case_with_status")
+            return [] 
+
     
 
     async def is_new_case_processed(self, tenant_id: str, case_id: str):
