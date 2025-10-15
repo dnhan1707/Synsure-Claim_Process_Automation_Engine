@@ -65,7 +65,9 @@ def create_insight_route() -> APIRouter:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
         
 
-
+    '''
+    Route for what rule is being broken / accepted
+    '''
 
 
     return router
