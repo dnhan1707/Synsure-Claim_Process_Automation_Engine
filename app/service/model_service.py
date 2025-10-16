@@ -57,8 +57,8 @@ class ModelService():
                     reasoning={"effort": "medium"},
                     text={"verbosity": "low"},
                 )
-                clean_response = response.output_text.strip()
-                is_valid, result = self.validator.validate_gemini_response(clean_response)
+                resp = response.output_text.strip()
+                is_valid, result = self.validator.validate_gemini_response(resp)
                 
                 if is_valid:
                     return result
