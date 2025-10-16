@@ -2,6 +2,7 @@ import json
 
 class Validator():
     def __init__(self):
+        #don't validator need "short_des" & "rule_used"?
         self.gemini_response_expected_keys = {"decision", "reasoning", "confidence", "riskScore", "flags"}
 
     def validate_gemini_response(self, response_text: str):

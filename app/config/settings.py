@@ -5,6 +5,10 @@ import os
 
 load_dotenv()
 
+class GPT5Settings(BaseModel):
+    api_key: str = Field(default_factory=lambda: os.getenv('OPENAI_API_KEY'))
+    default_model: str = Field(default_factory=lambda: os.getenv('GPT5_DEFAULT_MODEL', 'gpt-5'))
+
 class GeminiSettings(BaseModel):
     api_key: str = Field(default_factory=lambda: os.getenv('GEMINI_API'))
     default_model: str = Field(default='gemini-2.5-flash')
@@ -39,6 +43,7 @@ class RedisSetting(BaseModel):
 
 class Settings(BaseModel):
     env: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT"))
+    gpt5: GPT5Settings = Field(default_factory=GPT5Settings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
     supabase: SupabaseSetting = Field(default_factory=SupabaseSetting)
@@ -86,13 +91,13 @@ def get_prompt(details: str):
             4. Claim amount reasonableness 
             5. Supporting evidence quality and consistency 
             6. Must have evidence supporting the claim 
-            7. If it is following the chubb insurance company’s policy, search and describe which elements it is following to ensure accuracy. 
+            7. If it is following the chubb insurance USA company’s policy, search and describe which elements it is following to ensure accuracy. 
 
         **OUTPUT FORMAT - RESPOND WITH EXACTLY THIS JSON STRUCTURE:**
         {{
         "short_des": "[a few words describe the case]",
         "decision": "[APPROVED|REJECTED|REVIEW_REQUIRED]",
-        "reasoning": "[2-3 sentence explanation of your rule analysis, include rules and policies from insured insurance company (the insured insurance company is chubb insurance for this prompt), insurance laws, legal regulations, legal statutes, legal standards and any other key factors you used in your analysis]",
+        "reasoning": "[2-3 sentence explanation of your rule analysis, include rules and policies from insured insurance company (the insured insurance company is chubb insurance USA for this prompt), insurance laws, legal regulations, legal statutes, legal standards and any other key factors you used in your analysis]",
         "confidence": [number between 0-100 representing confidence in decision],
         "riskScore": "[LOW|MEDIUM|HIGH]",
         "flags": ["FLAG1", "FLAG2", "FLAG3"],
@@ -100,8 +105,8 @@ def get_prompt(details: str):
         "rule_followed" : "[true or false depending on rule analysis if rule_followed is true, claim must follow all rules and as soon as claim breaks one rule, rule_followed must be false]" 
         }}
         **RULE_USED INSTRUCTIONS:**
-        In the "rule_used" field, cite the ACTUAL insurance laws, regulations, legal statutes, or industry standards that support your decision.
-        Reference the specific legal authority, statute, regulation, or established insurance law principle that justifies your decision. If multiple laws apply, list the most relevant ones.
+        In the "rule_used" field, cite the ACTUAL insurance laws, insured insurance company's (chubb insurance USA company for this prompt) rules and policies, legal regulations, legal statues, or industry standards that support your rules analysis.
+        Reference the specific legal authority, statute, regulation, or established insurance law principle that justifies your analysis. If multiple laws apply, list the most relevant ones.
 
 
         **DECISION CRITERIA:**

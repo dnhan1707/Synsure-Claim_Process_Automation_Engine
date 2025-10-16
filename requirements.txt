@@ -3,6 +3,7 @@ uvicorn
 google-genai
 python-dotenv
 google
+openai==2.3.0
 PyPDF2
 pydantic[email]
 dotenv
