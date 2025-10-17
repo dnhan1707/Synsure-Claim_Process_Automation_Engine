@@ -101,7 +101,7 @@ def get_prompt(details: str):
         "confidence": [number between 0-100 representing confidence in decision],
         "riskScore": "[LOW|MEDIUM|HIGH]",
         "flags": ["FLAG1", "FLAG2", "FLAG3"],
-        "rule_used": "[Cite the actual insurance laws, regulations, statutes, or legal standards that apply to this decision with '#' seperated]",
+        "rule_used": "[Cite the actual insurance laws, regulations, statutes, or legal standards that apply to this decision with '|' seperated]",
         "rule_followed" : "[true or false depending on rule analysis if rule_followed is true, claim must follow all rules and as soon as claim breaks one rule, rule_followed must be false]" 
         }}
         **RULE_USED INSTRUCTIONS:**
@@ -131,6 +131,7 @@ def get_prompt(details: str):
         Evidence: "POLICE_REPORT_AVAILABLE", "MEDICAL_VERIFIED", "WITNESS_AVAILABLE", "VIDEO_EVIDENCE"
         Risk: "HIGH_VALUE_CLAIM", "REPEAT_CLAIMANT", "POLICY_RECENT"
         Verification: "THIRD_PARTY_LIABILITY", "FIRE_DEPT_VERIFIED", "COVERAGE_ADEQUATE"
+        
     """
     return prompt
 
