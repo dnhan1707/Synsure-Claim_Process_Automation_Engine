@@ -4,6 +4,7 @@ from app.routes.email_routes import create_email_route
 from app.routes.tenant_routes import create_tenant_routes
 from app.routes.claim_manager_route import create_claim_manager_routes
 from app.routes.case_routes_v2 import create_case_routes_v2
+from app.routes.case_routes_v2 import create_case_routes_v3
 from app.routes.submission_routes import create_submission_routes2
 from app.routes.file_routes import create_file_routes_v2
 from app.routes.task_routes import create_task_router
@@ -90,6 +91,7 @@ def create_application() -> FastAPI:
     app.include_router(create_tenant_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_claim_manager_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_case_routes_v2(), dependencies=[Depends(require_api_key)])
+    app.include_router(create_case_routes_v3(), dependencies=[Depends(require_api_key)])
     app.include_router(create_file_routes_v2(), dependencies=[Depends(require_api_key)])
     app.include_router(create_submission_routes2(), dependencies=[Depends(require_api_key)])
     app.include_router(create_task_router(), dependencies=[Depends(require_api_key)])
