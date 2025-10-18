@@ -1,106 +1,59 @@
-<h1> Synsure Insurance Claims Processing API Documentation</h1>
+# Synsure API Reference
 
-<h2> Base Information</h2>
-<ul>
-<li><strong>Base URL:</strong> <code>http://localhost:8000</code></li>
-<li><strong>API Version:</strong> 2.0.0</li>
-<li><strong>Authentication:</strong> All endpoints require <code>x-api-key</code> header</li>
-<li><strong>Content-Type:</strong> <code>application/json</code> (unless specified otherwise)</li>
-</ul>
+Base URL
+- http://localhost:8000
 
-<hr>
+Auth
+- All endpoints require the x-api-key header.
+- For multipart/form-data (file uploads), do NOT set Content-Type manually; let the browser/client set it.
 
-<h2> Table of Contents</h2>
-<ol>
-<li><a href="#authentication">Authentication</a></li>
-<li><a href="#response-format">Response Format</a></li>
-<li><a href="#tenants-api">Tenants API</a></li>
-<li><a href="#cases-api">Cases API</a></li>
-<li><a href="#files-api">Files API</a></li>
-<li><a href="#ai-processing-api">AI Processing API</a></li>
-<li><a href="#tasks-api">Tasks API</a></li>
-<li><a href="#email-api">Email API</a></li>
-<li><a href="#error-handling">Error Handling</a></li>
-<li><a href="#usage-examples">Usage Examples</a></li>
-</ol>
+Standard Response Envelope
+- success: boolean
+- error?: string
+- result?: any
 
-<hr>
+Example:
+```json
+{ "success": true, "result": { /* data */ } }
+```
 
-<h2 id="authentication"> Authentication</h2>
+Error format:
+```json
+{ "success": false, "error": "Detailed error message" }
+```
 
-<p>All API endpoints require authentication via API key in the request header:</p>
+---
 
-<pre><code class="language-javascript">headers: {
-  'x-api-key': 'your-api-key-here',
-  'Content-Type': 'application/json'
-}
-</code></pre>
+## Tenants
 
-<hr>
+Create tenant
+- POST /tenant/
+- Body (application/json):
+```json
+{ "tenant_name": "Acme Insurance Corp" }
+```
+- Response:
+```json
+{ "success": true, "message": "Tenant created successfully" }
+```
 
-<h2 id="response-format"> Response Format</h2>
-
-<p>All API responses follow a consistent format:</p>
-
-<pre><code class="language-typescript">interface StandardResponse {
-  success: boolean;
-  error?: string;  // Present only if success is false
-}
-
-interface DataResponse extends StandardResponse {
-  result?: any;    // Contains the actual data
-}
-</code></pre>
-
-<hr>
-
-<h2 id="tenants-api">👥 Tenants API</h2>
-
-<h3>Create New Tenant</h3>
-<pre><code>POST /tenant/
-</code></pre>
-
-<p><strong>Request Body:</strong></p>
-<pre><code class="language-json">{
-  "tenant_name": "Acme Insurance Corp"
-}
-</code></pre>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
-  "success": true,
-  "message": "Tenant created successfully"
-}
-</code></pre>
-
-<h3>Get All Tenants</h3>
-<pre><code>GET /tenant/
-</code></pre>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+List tenants
+- GET /tenant/
+- Response:
+```json
+{
   "success": true,
   "result": [
-    {
-      "id": "tenant-uuid",
-      "name": "Acme Insurance Corp",
-      "created_at": "2025-01-01T00:00:00Z"
-    }
+    { "id": "tenant-uuid", "name": "Acme Insurance Corp", "created_at": "2025-01-01T00:00:00Z" }
   ]
 }
-</code></pre>
+```
 
-<h3>Get Tenant Details</h3>
-<pre><code>GET /tenant/{tenant_id}
-</code></pre>
-
-<p><strong>Path Parameters:</strong></p>
-<ul>
-<li><code>tenant_id</code> (string): The unique tenant identifier</li>
-</ul>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Get tenant
+- GET /tenant/{tenant_id}
+- Response:
+```json
+{
   "success": true,
   "result": {
     "id": "tenant-uuid",
@@ -110,17 +63,17 @@ interface DataResponse extends StandardResponse {
     "active_cases": 8
   }
 }
-</code></pre>
+```
 
-<hr>
-<h2 id="cases-api">📁 Cases API</h2>
+---
 
-<h3>Get All Cases for Tenant</h3>
-<pre><code>GET /api/v2/case/{tenant_id}
-</code></pre>
+## Cases (v2)
 
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+List cases for a tenant
+- GET /api/v2/case/{tenant_id}
+- Response:
+```json
+{
   "success": true,
   "result": [
     {
@@ -133,88 +86,67 @@ interface DataResponse extends StandardResponse {
     }
   ]
 }
-</code></pre>
+```
 
-<h3>Get Case Details</h3>
-<pre><code>GET /api/v2/case/{tenant_id}/{case_id}
-</code></pre>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Get case details
+- GET /api/v2/case/{tenant_id}/{case_id}
+- Response:
+```json
+{
   "success": true,
   "result": {
     "id": "case-uuid",
     "name": "Property Damage Claim",
     "tenant_id": "tenant-uuid",
     "files": [
-      {
-        "id": "file-uuid",
-        "name": "estimate.pdf",
-        "size": 2048000,
-        "type": "application/pdf"
-      }
+      { "id": "file-uuid", "name": "estimate.pdf", "size": 2048000, "type": "application/pdf" }
     ],
     "responses": [
-      {
-        "id": "response-uuid",
-        "ai_analysis": "Analysis results...",
-        "created_at": "2025-01-01T00:00:00Z"
-      }
+      { "id": "response-uuid", "ai_analysis": "Analysis results...", "created_at": "2025-01-01T00:00:00Z" }
     ]
   }
 }
-</code></pre>
+```
 
-<h3>Create New Case</h3>
-<pre><code>POST /api/v2/case/
-Content-Type: multipart/form-data
-</code></pre>
+Create case
+- POST /api/v2/case/
+- Content-Type: multipart/form-data
+- Form fields:
+  - tenant_id: string
+  - case_name: string
+  - files?: file[]
+- Response: StandardResponse (created case metadata)
 
-<p><strong>Form Data:</strong></p>
-<ul>
-<li><code>tenant_id</code> (string): Tenant ID</li>
-<li><code>case_name</code> (string): Case name</li>
-<li><code>files</code> (file[], optional): Files to upload</li>
-</ul>
-
-<h3>Get Latest AI Response</h3>
-<pre><code>GET /api/v2/case/latestresponse/{tenant_id}/{case_id}
-</code></pre>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Get latest AI response for a case
+- GET /api/v2/case/latestresponse/{tenant_id}/{case_id}
+- Response:
+```json
+{
   "success": true,
   "result": {
     "id": "response-uuid",
     "ai_analysis": "The claim appears to be valid based on the documentation provided...",
     "confidence_score": 0.85,
-    "recommendations": [
-      "Request additional medical documentation",
-      "Verify repair estimates"
-    ],
+    "recommendations": ["Request additional medical documentation", "Verify repair estimates"],
     "created_at": "2025-01-01T00:00:00Z"
   }
 }
-</code></pre>
+```
 
-<hr>
+---
 
-<h2 id="files-api">📎 Files API</h2>
+## Files (v1)
 
-<h3>Check for Duplicate Files</h3>
-<pre><code>POST /api/v1/file/dupcheck
-Content-Type: multipart/form-data
-</code></pre>
-
-<p><strong>Form Data:</strong></p>
-<ul>
-<li><code>tenant_id</code> (string): Tenant ID</li>
-<li><code>case_id</code> (string): Case ID</li>
-<li><code>files</code> (file[]): Files to check</li>
-</ul>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Check duplicates before upload
+- POST /api/v1/file/dupcheck
+- Content-Type: multipart/form-data
+- Form fields:
+  - tenant_id: string
+  - case_id: string
+  - files: file[]
+- Response (example shape; actual fields may vary by implementation):
+```json
+{
   "success": true,
   "duplicates": [
     {
@@ -225,48 +157,49 @@ Content-Type: multipart/form-data
   ],
   "actions_required": true
 }
-</code></pre>
+```
 
-<h3>Upload Files</h3>
-<pre><code>POST /api/v1/file/upload
-Content-Type: multipart/form-data
-</code></pre>
-
-<p><strong>Form Data:</strong></p>
-<ul>
-<li><code>tenant_id</code> (string): Tenant ID</li>
-<li><code>case_id</code> (string): Case ID</li>
-<li><code>files</code> (file[]): Files to upload</li>
-<li><code>file_actions</code> (string): JSON string of actions</li>
-</ul>
-
-<p><strong>file_actions JSON format:</strong></p>
-<pre><code class="language-json">[
+Upload files to a case
+- POST /api/v1/file/upload
+- Content-Type: multipart/form-data
+- Form fields:
+  - tenant_id: string
+  - case_id: string
+  - files: file[]
+  - file_actions: string (JSON string array; see below)
+- file_actions JSON item:
+```json
+[
   {
     "target_id": "existing-file-uuid-or-empty",
-    "action": "upload" // "upload", "overwrite", or "keep"
+    "action": "upload" // "upload" | "overwrite" | "keep"
   }
 ]
-</code></pre>
+```
+- Response (from backend):
+```json
+{ "success": true, "uploaded_files": 3 }
+```
+- Status codes: 201 on success, 400/500 on error
 
-<hr>
+Notes
+- file_actions must be a string containing valid JSON (the API parses and validates each action).
+- If duplicates were found via dupcheck, pass appropriate actions per item.
 
-<h2 id="ai-processing-api">🤖 AI Processing API</h2>
+---
 
-<h3>Create New Case with AI Processing</h3>
-<pre><code>POST /api/v1/submission/newcase
-Content-Type: multipart/form-data
-</code></pre>
+## AI Submission (v1)
 
-<p><strong>Form Data:</strong></p>
-<ul>
-<li><code>tenant_id</code> (string): Tenant ID</li>
-<li><code>case_name</code> (string): Case name</li>
-<li><code>files</code> (file[]): Files to process</li>
-</ul>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Create new case and run AI immediately
+- POST /api/v1/submission/newcase
+- Content-Type: multipart/form-data
+- Form fields:
+  - tenant_id: string
+  - case_name: string
+  - files: file[]
+- Response (example):
+```json
+{
   "success": true,
   "new_case_id": "case-uuid",
   "result": {
@@ -275,22 +208,18 @@ Content-Type: multipart/form-data
     "confidence_score": 0.89
   }
 }
-</code></pre>
+```
 
-<h3>Process Selected Files</h3>
-<pre><code>POST /api/v1/submission/start
-</code></pre>
-
-<p><strong>Request Body:</strong></p>
-<pre><code class="language-json">{
-  "tenant_id": "tenant-uuid",
-  "case_id": "case-uuid",
-  "chosen_files": ["file-uuid-1", "file-uuid-2"]
-}
-</code></pre>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Run AI for selected files in an existing case
+- POST /api/v1/submission/start
+- Content-Type: application/json
+- Body:
+```json
+{ "tenant_id": "tenant-uuid", "case_id": "case-uuid", "chosen_files": ["file-uuid-1", "file-uuid-2"] }
+```
+- Response (example):
+```json
+{
   "success": true,
   "result": {
     "ai_analysis": "Based on the selected documents...",
@@ -299,21 +228,18 @@ Content-Type: multipart/form-data
     "recommendations": ["Action item 1", "Action item 2"]
   }
 }
-</code></pre>
+```
 
-<h3>Batch Process Cases (Async)</h3>
-<pre><code>POST /api/v1/submission/submit-batch-async
-</code></pre>
-
-<p><strong>Request Body:</strong></p>
-<pre><code class="language-json">{
-  "tenant_id": "tenant-uuid",
-  "case_ids": ["case-uuid-1", "case-uuid-2", "case-uuid-3"]
-}
-</code></pre>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
+Batch process multiple cases asynchronously
+- POST /api/v1/submission/submit-batch-async
+- Content-Type: application/json
+- Body:
+```json
+{ "tenant_id": "tenant-uuid", "case_ids": ["case-uuid-1", "case-uuid-2", "case-uuid-3"] }
+```
+- Response:
+```json
+{
   "success": true,
   "message": "Submitted 3 cases for processing",
   "task_ids": {
@@ -323,29 +249,20 @@ Content-Type: multipart/form-data
   },
   "status_check_info": "Use /task/status/{tenant_id}?task_ids=id1,id2,id3 to check status"
 }
-</code></pre>
+```
 
-<hr>
+---
 
-<h2 id="tasks-api">⚙️ Tasks API</h2>
+## Tasks
 
-<h3>Get Task Status</h3>
-<pre><code>GET /task/status/{tenant_id}?task_ids=task-uuid-1,task-uuid-2
-</code></pre>
-
-<p><strong>Query Parameters:</strong></p>
-<ul>
-<li><code>task_ids</code> (string): Comma-separated list of task IDs (max 50)</li>
-</ul>
-
-<p><strong>Response:</strong></p>
-<pre><code class="language-json">{
-  "summary": {
-    "queued": 1,
-    "running": 2,
-    "completed": 5,
-    "failed": 0
-  },
+Get task status
+- GET /task/status/{tenant_id}?task_ids=task-uuid-1,task-uuid-2
+- Query:
+  - task_ids: comma-separated list (max 50)
+- Response (example):
+```json
+{
+  "summary": { "queued": 1, "running": 2, "completed": 5, "failed": 0 },
   "tasks": {
     "case-uuid-1": {
       "task_id": "task-uuid-1",
@@ -355,7 +272,7 @@ Content-Type: multipart/form-data
       "completed_at": "2025-01-01T00:02:30Z"
     },
     "case-uuid-2": {
-      "task_id": "task-uuid-2", 
+      "task_id": "task-uuid-2",
       "status": "running",
       "error": null,
       "created_at": "2025-01-01T00:01:00Z",
@@ -366,286 +283,75 @@ Content-Type: multipart/form-data
   "found": 8,
   "requested": 2
 }
-</code></pre>
+```
 
-<h3>Debug: Process Task Manually</h3>
-<pre><code>POST /task/debug/process-task
-</code></pre>
+Debug endpoints (if enabled)
+- POST /task/debug/process-task
+  - Body: { "task_id": "task-uuid" }
+- GET /task/debug/task/{task_id}
 
-<p><strong>Request Body:</strong></p>
-<pre><code class="language-json">{
-  "task_id": "task-uuid"
-}
-</code></pre>
+---
 
-<h3>Debug: Get Task Details</h3>
-<pre><code>GET /task/debug/task/{task_id}
-</code></pre>
+## Usage Examples
 
-<hr>
+JavaScript fetch (multipart upload)
+```js
+const form = new FormData();
+form.append('tenant_id', tenantId);
+form.append('case_id', caseId);
+files.forEach(f => form.append('files', f));
+form.append('file_actions', JSON.stringify([{ target_id: "", action: "upload" }]));
 
-<h2 id="email-api">📧 Email API</h2>
+const res = await fetch(`${baseUrl}/api/v1/file/upload`, {
+  method: 'POST',
+  headers: { 'x-api-key': apiKey }, // do not set Content-Type
+  body: form
+});
+const data = await res.json();
+```
 
-<p><em>Note: Email API endpoints would be documented here based on your email_routes.py implementation</em></p>
+cURL (new case submission with files)
+```bash
+curl -X POST "$BASE/api/v1/submission/newcase" ^
+  -H "x-api-key: %API_KEY%" ^
+  -F tenant_id=%TENANT_ID% ^
+  -F case_name="Auto Accident Claim" ^
+  -F files=@C:\path\to\doc1.pdf ^
+  -F files=@C:\path\to\doc2.pdf
+```
 
-<hr>
+Task status polling (JS)
+```js
+const ids = Object.values(taskIds).join(',');
+const res = await fetch(`${baseUrl}/task/status/${tenantId}?task_ids=${ids}`, {
+  headers: { 'x-api-key': apiKey }
+});
+const status = await res.json();
+```
 
-<h2 id="error-handling">❌ Error Handling</h2>
+---
 
-<h3>HTTP Status Codes</h3>
-<ul>
-<li><code>200</code> - Success</li>
-<li><code>201</code> - Created successfully</li>
-<li><code>400</code> - Bad request (validation errors)</li>
-<li><code>404</code> - Resource not found</li>
-<li><code>500</code> - Internal server error</li>
-</ul>
+## Status Codes
 
-<h3>Error Response Format</h3>
-<pre><code class="language-json">{
-  "success": false,
-  "error": "Detailed error message"
-}
-</code></pre>
+- 200 OK: Successful request
+- 201 Created: Resource created (e.g., file upload)
+- 400 Bad Request: Validation issues
+- 404 Not Found: Resource missing
+- 500 Internal Server Error
 
-<h3>Common Error Examples</h3>
+---
 
-<p><strong>Validation Error (400):</strong></p>
-<pre><code class="language-json">{
-  "success": false,
-  "error": "Missing required parameters: tenant_id, case_ids"
-}
-</code></pre>
+## Notes
 
-<p><strong>Not Found (404):</strong></p>
-<pre><code class="language-json">{
-  "success": false,
-  "error": "Case not found",
-  "result": {}
-}
-</code></pre>
+- File types typically supported: PDF, DOC, DOCX, JPG, PNG.
+- Keep task status polling to every 5–10 seconds to avoid rate limits.
+- For uploads, backend validates file_actions against the uploaded files.
 
-<p><strong>Server Error (500):</strong></p>
-<pre><code class="language-json">{
-  "success": false,
-  "error": "Internal server error"
-}
-</code></pre>
+---
 
-<hr>
+## Where this spec comes from
 
-<h2 id="usage-examples">💡 Usage Examples</h2>
-
-<h3>Complete Workflow Example (JavaScript)</h3>
-
-<pre><code class="language-javascript">class SynsureAPI {
-  constructor(apiKey, baseUrl = 'http://localhost:8000') {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
-  }
-
-  async request(endpoint, options = {}) {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers: {
-        'x-api-key': this.apiKey,
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
-    });
-    
-    return await response.json();
-  }
-
-  // Create a new tenant
-  async createTenant(tenantName) {
-    return this.request('/tenant/', {
-      method: 'POST',
-      body: JSON.stringify({ tenant_name: tenantName })
-    });
-  }
-
-  // Create a new case with files and get AI analysis
-  async createCaseWithAI(tenantId, caseName, files) {
-    const formData = new FormData();
-    formData.append('tenant_id', tenantId);
-    formData.append('case_name', caseName);
-    files.forEach(file => formData.append('files', file));
-
-    return this.request('/api/v1/submission/newcase', {
-      method: 'POST',
-      headers: { 'x-api-key': this.apiKey }, // Don't set Content-Type for FormData
-      body: formData
-    });
-  }
-
-  // Process specific files from existing case
-  async processFiles(tenantId, caseId, fileIds) {
-    return this.request('/api/v1/submission/start', {
-      method: 'POST',
-      body: JSON.stringify({
-        tenant_id: tenantId,
-        case_id: caseId,
-        chosen_files: fileIds
-      })
-    });
-  }
-
-  // Batch process multiple cases asynchronously
-  async batchProcess(tenantId, caseIds) {
-    return this.request('/api/v1/submission/submit-batch-async', {
-      method: 'POST',
-      body: JSON.stringify({
-        tenant_id: tenantId,
-        case_ids: caseIds
-      })
-    });
-  }
-
-  // Check status of background tasks
-  async checkTaskStatus(tenantId, taskIds) {
-    const taskIdString = taskIds.join(',');
-    return this.request(`/task/status/${tenantId}?task_ids=${taskIdString}`);
-  }
-
-  // Get latest AI analysis for a case
-  async getLatestAnalysis(tenantId, caseId) {
-    return this.request(`/api/v2/case/latestresponse/${tenantId}/${caseId}`);
-  }
-}
-
-// Usage example
-const api = new SynsureAPI('your-api-key');
-
-// Complete workflow
-async function processInsuranceClaim() {
-  try {
-    // 1. Create tenant
-    const tenant = await api.createTenant('ABC Insurance');
-    console.log('Tenant created:', tenant);
-
-    // 2. Create case with files and get immediate AI analysis
-    const files = [/* File objects from input */];
-    const newCase = await api.createCaseWithAI(
-      'tenant-uuid', 
-      'Auto Accident Claim', 
-      files
-    );
-    console.log('Case created with AI analysis:', newCase);
-
-    // 3. For batch processing multiple cases
-    const batchResult = await api.batchProcess('tenant-uuid', [
-      'case-1', 'case-2', 'case-3'
-    ]);
-    console.log('Batch processing started:', batchResult);
-
-    // 4. Monitor batch processing status
-    const taskIds = Object.values(batchResult.task_ids);
-    const status = await api.checkTaskStatus('tenant-uuid', taskIds);
-    console.log('Task status:', status);
-
-    // 5. Get final analysis results
-    const analysis = await api.getLatestAnalysis('tenant-uuid', 'case-uuid');
-    console.log('AI Analysis:', analysis);
-
-  } catch (error) {
-    console.error('API Error:', error);
-  }
-}
-</code></pre>
-
-<h3>React Hook Example</h3>
-
-<pre><code class="language-typescript">import { useState, useEffect } from 'react';
-
-interface TaskStatus {
-  summary: {
-    queued: number;
-    running: number;
-    completed: number;
-    failed: number;
-  };
-  tasks: Record&lt;string, any&gt;;
-}
-
-export function useTaskMonitoring(tenantId: string, taskIds: string[]) {
-  const [status, setStatus] = useState&lt;TaskStatus | null&gt;(null);
-  const [loading, setLoading] = useState(false);
-
-  const checkStatus = async () => {
-    if (!taskIds.length) return;
-    
-    setLoading(true);
-    try {
-      const api = new SynsureAPI('your-api-key');
-      const result = await api.checkTaskStatus(tenantId, taskIds);
-      setStatus(result);
-    } catch (error) {
-      console.error('Failed to check task status:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Poll status every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(checkStatus, 5000);
-    checkStatus(); // Check immediately
-    
-    return () => clearInterval(interval);
-  }, [tenantId, taskIds]);
-
-  return { status, loading, refetch: checkStatus };
-}
-</code></pre>
-
-<hr>
-
-<h2>🔧 Development Notes</h2>
-
-<h3>File Upload Guidelines</h3>
-<ul>
-<li>Maximum file size: Check with backend team</li>
-<li>Supported formats: PDF, DOC, DOCX, JPG, PNG</li>
-<li>Use <code>multipart/form-data</code> for file uploads</li>
-<li>Use <code>application/json</code> for other requests</li>
-</ul>
-
-<h3>Task Processing</h3>
-<ul>
-<li>Batch processing is asynchronous - use task monitoring</li>
-<li>Tasks have 4 states: <code>queued</code>, <code>running</code>, <code>completed</code>, <code>failed</code></li>
-<li>Check task status periodically (recommended: every 5-10 seconds)</li>
-<li>Maximum 50 task IDs per status check request</li>
-</ul>
-
-<h3>Rate Limiting</h3>
-<ul>
-<li>Implement client-side rate limiting for batch operations</li>
-<li>Consider exponential backoff for failed requests</li>
-<li>Don't poll task status more frequently than every 5 seconds</li>
-</ul>
-
-<h3>Error Handling Best Practices</h3>
-<pre><code class="language-javascript">async function safeApiCall(apiFunction) {
-  try {
-    const result = await apiFunction();
-    
-    if (!result.success) {
-      throw new Error(result.error || 'API request failed');
-    }
-    
-    return result;
-  } catch (error) {
-    // Log error for debugging
-    console.error('API Error:', error);
-    
-    // Show user-friendly message
-    throw new Error('Something went wrong. Please try again.');
-  }
-}
-</code></pre>
-
-<hr>
-
-<p><strong>📞 Support:</strong> For any questions or issues, please contact the backend development team or create an issue in this repository.</p>
+- Files API routes: app/routes/file_routes.py
+- Cases API routes: app/routes/case_routes_v2.py
+- Submission (AI) routes: app/routes/submission_routes.py
+- File handling services: app/service/file_service.py, app/service/case_service_v2.py
