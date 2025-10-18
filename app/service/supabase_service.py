@@ -1,6 +1,6 @@
 from app.config.settings import get_settings
 from supabase import Client, create_client
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 import re
 import os
@@ -756,3 +756,133 @@ class SupabaseServiceV2():
         except Exception as e:
             logger.error(f"Error is_new_case_processed")
             return False
+        
+
+
+    async def get_all_cases(self, columns: str, available: bool = True):
+        try:
+            q = self.sp_client.table("cases").select(columns)
+            if available:
+                q = q.is_("deleted_at", "null")
+            response = q.execute()
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Error get_all_cases: {e}")
+            return []
+
+    async def get_case_by_id(self, columns: str, case_id: str):
+        try:
+            response = (
+                self.sp_client.table("cases")
+                .select(columns)
+                .eq("id", case_id)
+                .is_("deleted_at", "null")
+                .limit(1)
+                .execute()
+            )
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Error get_case_by_id: {e}")
+            return None
+
+    async def get_tenants_by_name(self, name_query: str, columns: str = "id, name"):
+        try:
+            response = (
+                self.sp_client.table("tenants")
+                .select(columns)
+                .ilike("name", f"%{name_query}%")
+                .execute()
+            )
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Error get_tenants_by_name: {e}")
+            return []
+
+    async def get_tenants_by_ids(self, tenant_ids: list[str], columns: str = "id, name"):
+        if not tenant_ids:
+            return []
+        try:
+            response = (
+                self.sp_client.table("tenants")
+                .select(columns)
+                .in_("id", tenant_ids)
+                .execute()
+            )
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Error get_tenants_by_ids: {e}")
+            return []
+        
+
+    async def get_files_by_case_id(self, columns: str, case_id: str):
+        try:
+            response = (
+                self.sp_client.table("files")
+                .select(columns)
+                .eq("case_id", case_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Error get_files_by_case_id: {e}")
+            return []
+
+
+    async def search_cases(self, q: str, columns: str, tenant_id: str | None = None):
+        """
+        Search across cases.case_name, cases.short_des, and tenants.name.
+        Returns unique cases.
+        """
+        try:
+            cols = columns
+            if "tenant_id" not in [c.strip() for c in columns.split(",")]:
+                cols = f"tenant_id, {columns}"
+
+            results_by_id: dict[str, dict] = {}
+
+            # 1) Text search on cases.case_name
+            resp_name = (
+                self.sp_client.table("cases")
+                .select(cols)
+                .ilike("case_name", f"%{q}%")
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            for r in resp_name.data or []:
+                results_by_id[r["id"]] = r
+
+            # 2) Text search on cases.short_des
+            resp_desc = (
+                self.sp_client.table("cases")
+                .select(cols)
+                .ilike("short_des", f"%{q}%")
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            for r in resp_desc.data or []:
+                results_by_id[r["id"]] = r
+
+            # 3) Tenants.name search → then fetch cases by those tenant_ids
+            tenants = await self.get_tenants_by_name(q, columns="id, name")
+            tenant_ids = [t["id"] for t in tenants]
+            if tenant_ids:
+                resp_tenants = (
+                    self.sp_client.table("cases")
+                    .select(cols)
+                    .in_("tenant_id", tenant_ids)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+                for r in resp_tenants.data or []:
+                    results_by_id[r["id"]] = r
+
+            final = list(results_by_id.values())
+            if tenant_id:
+                final = [c for c in final if c.get("tenant_id") == tenant_id]
+
+            return final
+        except Exception as e:
+            logger.error(f"Error search_cases: {e}")
+            return []
+        

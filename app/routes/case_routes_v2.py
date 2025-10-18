@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, Path, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Path, Query
 from fastapi.responses import JSONResponse
 from app.service.case_service_v2 import CaseService
 from app.models.request_models import StandardResponse
@@ -196,5 +196,46 @@ def create_case_routes_v2() -> APIRouter:
                 }, 
                 status_code=500
             )
+    return router
+
+
+def create_case_routes_v3() -> APIRouter:
+    router = APIRouter(
+        prefix="/api/v3/case",
+        tags=["Cases"]
+    )
+
+    @router.get("/")
+    async def list_cases(
+        tenant_id: Optional[str] = Query(None, description="Optional tenant filter"),
+        q: Optional[str] = Query(None, description="Search text across case_name, tenant name, short_des")
+    ):
+        """
+        List cases.
+        - No params: all cases
+        - tenant_id only: filter by tenant
+        - q only: free-text search across case_name, tenant name, short_des
+        - both: search + tenant filter
+        """
+        try:
+            res = await case_service.v3_list_cases(tenant_id=tenant_id, q=q)
+            return JSONResponse({"success": True, "result": res}, status_code=200)
+        except Exception as e:
+            logger.error(f"Error in v3 list_cases: {e}", exc_info=True)
+            return JSONResponse({"success": False, "error": str(e), "result": {"count": 0, "data": []}}, status_code=500)
+
+    @router.get("/{case_id}")
+    async def get_case_by_id(
+        case_id: str = Path(..., description="Case ID")
+    ):
+        """Get case by ID (no tenant needed)."""
+        try:
+            res = await case_service.v3_get_case(case_id)
+            if not res:
+                return JSONResponse({"success": False, "result": {}, "error": "Case not found"}, status_code=404)
+            return JSONResponse({"success": True, "result": res}, status_code=200)
+        except Exception as e:
+            logger.error(f"Error in v3 get_case_by_id: {e}", exc_info=True)
+            return JSONResponse({"success": False, "error": str(e), "result": {}}, status_code=500)
 
     return router

@@ -235,6 +235,7 @@ class InsightService:
                 return response.data if response.data else []
             except:
                 # Fallback to Python filtering
+                logger.info("Fall back using Python filtering")
                 return await self._get_cases_with_python_filter(conditions)
                 
         except Exception as e:

@@ -317,3 +317,55 @@ class CaseService:
             logger.error(f"Error deleting response_input_files for response {response_id}: {e}")
             return []
         
+
+
+    async def v3_list_cases(self, tenant_id: Optional[str] = None, q: Optional[str] = None) -> dict:
+        try:
+            columns = "id, case_name, short_des, status, case_type, created_at, updated_at, tenant_id"
+            if q:
+                cases = await self.sp_service.search_cases(q=q, columns=columns, tenant_id=tenant_id)
+            else:
+                if tenant_id:
+                    cases = await self.sp_service.get_all_cases_by_tenant(
+                        table_name="cases",
+                        columns=columns,
+                        tenant_id=tenant_id,
+                        available=True
+                    ) or []
+                else:
+                    cases = await self.sp_service.get_all_cases(columns=columns, available=True)
+
+            tenant_ids = list({c["tenant_id"] for c in cases if c.get("tenant_id")})
+            tenants = await self.sp_service.get_tenants_by_ids(tenant_ids, columns="id, name")
+            tmap = {t["id"]: t.get("name") for t in tenants}
+
+            for c in cases:
+                c["tenant_name"] = tmap.get(c.get("tenant_id"))
+
+            return {"count": len(cases), "data": cases}
+        except Exception as e:
+            logger.error(f"Error v3_list_cases: {e}")
+            return {"count": 0, "data": []}
+        
+
+    async def v3_get_case(self, case_id: str) -> Optional[dict]:
+        try:
+            columns = "id, tenant_id, case_name, short_des, status, case_type, created_at, updated_at"
+            case = await self.sp_service.get_case_by_id(columns=columns, case_id=case_id)
+            if not case:
+                return None
+
+            tenants = await self.sp_service.get_tenants_by_ids([case["tenant_id"]], columns="id, name")
+            case["tenant_name"] = tenants[0]["name"] if tenants else None
+
+            # Optional: files (presigned could be added later)
+            files = await self.sp_service.get_files_by_case_id(
+                columns="id, name, s3_key, uploaded_at",
+                case_id=case_id
+            )
+            case["files"] = files
+
+            return case
+        except Exception as e:
+            logger.error(f"Error v3_get_case: {e}")
+            return None
