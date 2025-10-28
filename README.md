@@ -1,4 +1,4 @@
-<img width="1490" height="751" alt="image" src="https://github.com/user-attachments/assets/7a3b773a-ce38-42ed-a44e-77a4cf542c8c" /># 🛡️ Synsure  
+# 🛡️ Synsure  
 **AI-powered claims process automation**
 
 Synsure streamlines insurance claims by combining **AI, automation, and secure cloud infrastructure**. It eliminates repetitive manual work, accelerates approvals, and improves customer satisfaction with transparent, real-time claim tracking.  
@@ -23,6 +23,8 @@ Synsure streamlines insurance claims by combining **AI, automation, and secure c
 <img width="1889" height="828" alt="image" src="https://github.com/user-attachments/assets/e896d3e3-1745-466b-9687-5b4dea1e26d1" />
 <img width="1515" height="860" alt="image" src="https://github.com/user-attachments/assets/ab57e8ee-ceb5-4e5b-9cc0-6d25d3b2c97d" />
 <img width="1490" height="751" alt="image" src="https://github.com/user-attachments/assets/6652941f-f755-43ee-a67a-65bf0a8e7fdb" />
+<img width="1471" height="694" alt="image" src="https://github.com/user-attachments/assets/49be3b99-033a-4336-afea-c84079bdcf72" />
+<img width="1889" height="855" alt="image" src="https://github.com/user-attachments/assets/a742503e-04c0-49aa-a799-c4f7e6eb7df0" />
 
 ---
 
