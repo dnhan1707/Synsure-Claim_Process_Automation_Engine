@@ -22,6 +22,7 @@ Synsure streamlines insurance claims by combining **AI, automation, and secure c
 <img width="1889" height="828" alt="image" src="https://github.com/user-attachments/assets/e896d3e3-1745-466b-9687-5b4dea1e26d1" />
 <img width="1515" height="860" alt="image" src="https://github.com/user-attachments/assets/ab57e8ee-ceb5-4e5b-9cc0-6d25d3b2c97d" />
 <img width="1490" height="751" alt="image" src="https://github.com/user-attachments/assets/6652941f-f755-43ee-a67a-65bf0a8e7fdb" />
+<img width="1869" height="870" alt="image" src="https://github.com/user-attachments/assets/3a748124-6b02-4494-b3b0-6541e96086c2" />
 <img width="1889" height="855" alt="image" src="https://github.com/user-attachments/assets/a742503e-04c0-49aa-a799-c4f7e6eb7df0" />
 
 ---
