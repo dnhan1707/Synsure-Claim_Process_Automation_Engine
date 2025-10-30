@@ -18,9 +18,12 @@ Synsure streamlines insurance claims by combining **AI, automation, and secure c
 
 ## 🖥️ Screenshots
 
-| Case Dashboard | Case Detail |
-|----------------|-------------|
-| <img width="1615" height="477" alt="Dashboard" src="https://github.com/user-attachments/assets/8a23ae40-58f0-4f34-a800-efccab3bf470" /> | <img width="1615" height="911" alt="Case Detail" src="https://github.com/user-attachments/assets/9c3584a9-305d-4520-9b1f-4a6d19b7028b" /> |
+<img width="1890" height="854" alt="image" src="https://github.com/user-attachments/assets/bab1d635-a849-417e-b51a-b20141d58012" />
+<img width="1889" height="828" alt="image" src="https://github.com/user-attachments/assets/e896d3e3-1745-466b-9687-5b4dea1e26d1" />
+<img width="1515" height="860" alt="image" src="https://github.com/user-attachments/assets/ab57e8ee-ceb5-4e5b-9cc0-6d25d3b2c97d" />
+<img width="1490" height="751" alt="image" src="https://github.com/user-attachments/assets/6652941f-f755-43ee-a67a-65bf0a8e7fdb" />
+<img width="1869" height="870" alt="image" src="https://github.com/user-attachments/assets/3a748124-6b02-4494-b3b0-6541e96086c2" />
+<img width="1889" height="855" alt="image" src="https://github.com/user-attachments/assets/a742503e-04c0-49aa-a799-c4f7e6eb7df0" />
 
 ---
 
