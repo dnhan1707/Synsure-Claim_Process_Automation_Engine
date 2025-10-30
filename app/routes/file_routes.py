@@ -15,7 +15,7 @@ def create_file_routes_v2() -> APIRouter:
     router = APIRouter(
         prefix="/api/v1/file",
         tags=["Files"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
     
     # Route definitions in a more organized structure

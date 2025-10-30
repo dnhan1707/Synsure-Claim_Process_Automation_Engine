@@ -13,7 +13,7 @@ def create_dashboard_route() -> APIRouter:
     router = APIRouter(
         prefix="/api/v1/dashboard",
         tags=["Dashboard"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
 
 

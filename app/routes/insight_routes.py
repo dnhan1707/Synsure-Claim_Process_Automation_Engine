@@ -10,7 +10,7 @@ def create_insight_route() -> APIRouter:
     router = APIRouter(
         prefix="/api/v2/insight",
         tags=["Insights"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
 
     @router.get("/most-type")

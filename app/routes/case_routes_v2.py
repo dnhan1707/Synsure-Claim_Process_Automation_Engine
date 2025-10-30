@@ -13,7 +13,7 @@ def create_case_routes_v2() -> APIRouter:
     router = APIRouter(
         prefix="/api/v2/case",
         tags=["Cases"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
 
     @router.post("/")
@@ -205,7 +205,7 @@ def create_case_routes_v3() -> APIRouter:
     router = APIRouter(
         prefix="/api/v3/case",
         tags=["Cases"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
 
     @router.get("/")

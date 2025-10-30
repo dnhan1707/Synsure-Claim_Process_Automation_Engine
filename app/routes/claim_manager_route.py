@@ -17,7 +17,7 @@ def create_claim_manager_routes() -> APIRouter:
     router = APIRouter(
         prefix="/claim/manager",
         tags=["Claims"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
     
     # Claims CRUD operations

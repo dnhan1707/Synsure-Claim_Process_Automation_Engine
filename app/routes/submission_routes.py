@@ -15,7 +15,7 @@ def create_submission_routes2() -> APIRouter:
     router = APIRouter(
         prefix="/api/v1/submission",
         tags=["AI Processing"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
 
     @router.post("/start", response_model=SubmissionResponse)

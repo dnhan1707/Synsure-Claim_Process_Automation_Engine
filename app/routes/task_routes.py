@@ -12,7 +12,7 @@ def create_task_router() -> APIRouter:
     router = APIRouter(
         prefix="/task",
         tags=["Tasks"],
-        dependencies=[Security(get_current_user)]
+        # dependencies=[Security(get_current_user)]
     )
 
     # More specific routes should come first to avoid path conflicts

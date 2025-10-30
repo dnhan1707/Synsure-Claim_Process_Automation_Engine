@@ -89,7 +89,7 @@ def create_application() -> FastAPI:
         )
 
     # Include routers in logical order
-    app.include_router(create_auth_routes(), dependencies=[Depends(require_api_key)])
+    # app.include_router(create_auth_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_tenant_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_claim_manager_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_case_routes_v2(), dependencies=[Depends(require_api_key)])
