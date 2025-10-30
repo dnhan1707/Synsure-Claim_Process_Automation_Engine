@@ -82,8 +82,8 @@ def create_tenant_routes() -> APIRouter:
                 status_code=200
             )
             
-        except Exception in e:
-            logger.error(f"Error in get_tenant: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Error in get_tenant: {str(e)}", exc_info=True)
             return JSONResponse(
                 {"success": False, "result": {}, "error": "Internal server error"}, 
                 status_code=500
