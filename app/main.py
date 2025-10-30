@@ -10,6 +10,7 @@ from app.routes.file_routes import create_file_routes_v2
 from app.routes.task_routes import create_task_router
 from app.routes.insight_routes import create_insight_route
 from app.routes.dashboard_routes import create_dashboard_route
+from app.routes.auth_routes import create_auth_routes
 from app.config.dependencies import require_api_key
 from app.config.security import security_setting
 
@@ -88,6 +89,7 @@ def create_application() -> FastAPI:
         )
 
     # Include routers in logical order
+    app.include_router(create_auth_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_tenant_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_claim_manager_routes(), dependencies=[Depends(require_api_key)])
     app.include_router(create_case_routes_v2(), dependencies=[Depends(require_api_key)])

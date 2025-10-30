@@ -1,0 +1,134 @@
+create table tenants (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamptz default now()
+);
+
+
+create table cases (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id),
+  external_ref text,
+  status text not null default 'open',  -- open processing, closed archived
+  create_by uuid,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  deleted_at timestamptz,
+  deleted_by uuid
+);
+
+create index idx_cases_tenant on cases(tenant_id, deleted_at, status);
+
+
+create table files (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id),
+  case_id uuid not null references cases(id),
+  kind text not null,
+  name text not null,
+  s3_bucket text not null,
+  s3_key text not null,
+  uploaded_by uuid,
+  uploaded_at timestamptz default now(),
+  superseded_by uuid references files(id),
+  deleted_at timestamptz,
+  deleted_by uuid
+);
+
+create table responses (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id),
+  case_id uuid not null references cases(id),
+  model_name text default 'synsure-model',
+  model_version text default 'synsure-v1',
+  status text not null default 'running',    -- running, succeeded, failed, canceled
+  params jsonb,
+  metrics jsonb,
+  started_at timestamptz default now(),
+  completed_at timestamptz,
+  created_by uuid,
+  deleted_at timestamptz,
+  deleted_by uuid
+);
+
+create table response_input_files (
+  response_id uuid references responses(id) on delete cascade,
+  file_id uuid references files(id),
+  primary key (response_id, file_id)
+);
+
+
+create table comments (
+  id uuid primary key,
+  tenant_id uuid not null references tenants(id),
+  case_id uuid,
+  file_id uuid,
+  response_id uuid,
+  author_id uuid not null,
+  body text not null,
+  created_at timestamptz default now(),
+  deleted_at timestamptz,
+  foreign key (case_id) references cases(id),
+  foreign key (file_id) references files(id),
+  foreign key (response_id) references responses(id)
+);
+
+alter table "cases" add column case_name TEXT not null;
+
+alter table responses add column s3_key text;
+
+create table task (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id),
+  case_id uuid not null references cases(id),
+  status text not null check (status in ('queued', 'running', 'completed', 'failed')),
+  response_id uuid references responses(id), -- Nullable until task completes
+  error_message text, -- Store error details
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  
+  -- Indexes for common queries
+  constraint task_tenant_case_idx unique (tenant_id, case_id)
+);
+
+--Essential indexes
+create index idx_task_tenant_id on task(tenant_id);
+create index idx_task_status on task(status);
+create index idx_task_case_id on task(case_id);
+create index idx_task_created_at on task(created_at desc);
+
+-- Composite index for common queries
+create index idx_task_tenant_status on task(tenant_id, status);
+
+-- Remove the unique constraint or modify it to include created_at
+alter table task drop constraint task_tenant_case_idx;
+
+-- Add a constraint that allows multiple tasks but prevents duplicates within a short time
+create index idx_task_tenant_case_recent on task(tenant_id, case_id, created_at desc);
+
+alter table task add column deleted_at timestamptz;
+
+alter table response_input_files add column deleted_at timestamptz;
+
+alter table responses add column rule_used text;
+
+ALTER TABLE cases
+ADD COLUMN case_type text NOT NULL DEFAULT 'other';
+
+alter table cases
+add column short_des text not null default 'unknown';
+
+-- Run this in your Supabase SQL editor
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'cases' 
+AND column_name = 'deleted_at';
+
+-- Compare with working table like 'files'
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'files' 
+AND column_name = 'deleted_at';
+
+alter table cases add column new_case_processed boolean;

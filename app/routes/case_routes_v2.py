@@ -1,7 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, Form, Path, Query
+from fastapi import APIRouter, UploadFile, File, Form, Path, Query, Depends, Security
 from fastapi.responses import JSONResponse
 from app.service.case_service_v2 import CaseService
 from app.models.request_models import StandardResponse
+from app.routes.auth_routes import get_current_user
 from typing import List, Optional
 import logging
 
@@ -11,7 +12,8 @@ case_service = CaseService()
 def create_case_routes_v2() -> APIRouter:
     router = APIRouter(
         prefix="/api/v2/case",
-        tags=["Cases"]
+        tags=["Cases"],
+        dependencies=[Security(get_current_user)]
     )
 
     @router.post("/")
@@ -202,7 +204,8 @@ def create_case_routes_v2() -> APIRouter:
 def create_case_routes_v3() -> APIRouter:
     router = APIRouter(
         prefix="/api/v3/case",
-        tags=["Cases"]
+        tags=["Cases"],
+        dependencies=[Security(get_current_user)]
     )
 
     @router.get("/")
