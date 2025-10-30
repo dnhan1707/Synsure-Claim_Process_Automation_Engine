@@ -1,6 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Security
 from fastapi.responses import JSONResponse
 from app.service.dashboard_service import DashboardService
+from app.routes.auth_routes import get_current_user
+
 import logging
 
 
@@ -10,7 +12,8 @@ dashboard_service = DashboardService()
 def create_dashboard_route() -> APIRouter:
     router = APIRouter(
         prefix="/api/v1/dashboard",
-        tags=["Dashboard"]
+        tags=["Dashboard"],
+        dependencies=[Security(get_current_user)]
     )
 
 

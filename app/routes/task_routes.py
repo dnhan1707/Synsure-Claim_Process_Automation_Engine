@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Query, Path, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException, Security
 from fastapi.responses import JSONResponse
 from app.service.task_service_v2 import TaskService
 from app.models.request_models import ProcessTaskRequest
+from app.routes.auth_routes import get_current_user
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,7 +11,8 @@ logger = logging.getLogger(__name__)
 def create_task_router() -> APIRouter:
     router = APIRouter(
         prefix="/task",
-        tags=["Tasks"]
+        tags=["Tasks"],
+        dependencies=[Security(get_current_user)]
     )
 
     # More specific routes should come first to avoid path conflicts

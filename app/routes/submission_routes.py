@@ -1,8 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter, UploadFile, File, Form, Security
 from fastapi.responses import JSONResponse
 from app.service.case_service_v2 import CaseService
 from app.service.submission_service import SubmissionService
 from app.models.request_models import SubmitFilesRequest, BatchSubmissionRequest, CaseResponse, SubmissionResponse, BatchResponse
+from app.routes.auth_routes import get_current_user
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,7 +14,8 @@ submission_service = SubmissionService()
 def create_submission_routes2() -> APIRouter:
     router = APIRouter(
         prefix="/api/v1/submission",
-        tags=["AI Processing"]    
+        tags=["AI Processing"],
+        dependencies=[Security(get_current_user)]
     )
 
     @router.post("/start", response_model=SubmissionResponse)

@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Security
 from fastapi.responses import JSONResponse
 from app.service.insight_service import InsightService
 from typing import Optional
+from app.routes.auth_routes import get_current_user
 
 insight_service = InsightService()
 
 def create_insight_route() -> APIRouter:
     router = APIRouter(
         prefix="/api/v2/insight",
-        tags=["Insights"]
+        tags=["Insights"],
+        dependencies=[Security(get_current_user)]
     )
 
     @router.get("/most-type")

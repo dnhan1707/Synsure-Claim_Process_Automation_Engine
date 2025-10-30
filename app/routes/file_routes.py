@@ -1,7 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, Form, Path
+from fastapi import APIRouter, UploadFile, File, Form, Path, Security
 from fastapi.responses import JSONResponse
 from app.service.file_service import FileService
 from app.models.request_models import FileActionItem
+from app.routes.auth_routes import get_current_user
+
 from typing import List
 import json
 import logging
@@ -12,7 +14,8 @@ file_service = FileService()
 def create_file_routes_v2() -> APIRouter:
     router = APIRouter(
         prefix="/api/v1/file",
-        tags=["Files"]
+        tags=["Files"],
+        dependencies=[Security(get_current_user)]
     )
     
     # Route definitions in a more organized structure

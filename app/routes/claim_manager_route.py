@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, Path, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Path, HTTPException, Security
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 from app.controller.claim_manager_controller import ClaimManagerController
@@ -6,6 +6,8 @@ from app.models.request_models import (
     CreateClaimRequest, UpdateClaimNameRequest, RemoveFilesRequest,
     ClaimResponse, ClaimsListResponse, StandardResponse
 )
+from app.routes.auth_routes import get_current_user
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +16,8 @@ claim_manager_controller = ClaimManagerController()
 def create_claim_manager_routes() -> APIRouter:
     router = APIRouter(
         prefix="/claim/manager",
-        tags=["Claims"]    
+        tags=["Claims"],
+        dependencies=[Security(get_current_user)]
     )
     
     # Claims CRUD operations
