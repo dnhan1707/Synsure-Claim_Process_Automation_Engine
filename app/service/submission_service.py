@@ -47,6 +47,18 @@ class SubmissionService:
                         continue
                     file_contents.append({"filename": file.filename, "content": content})
                     logger.info(f"Processed file {i}: {file.filename} ({len(content)} bytes)")
+
+                    # IMPORTANT: reset stream for later upload (S3)
+                    try:
+                        # Starlette UploadFile supports async seek
+                        await file.seek(0)
+                    except Exception:
+                        # Fallback to underlying file object if needed
+                        try:
+                            file.file.seek(0)
+                        except Exception as seek_err:
+                            logger.error(f"Failed to reset file pointer for {file.filename}: {seek_err}")
+                            return ("", {})
                 except Exception as file_error:
                     logger.error(f"Error reading file {i} ({file.filename}): {file_error}")
                     return ("", {})
